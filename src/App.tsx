@@ -1,0 +1,458 @@
+import React, { useEffect, useState, useCallback } from "react";
+import { Play, Sparkles, AlertCircle } from "lucide-react";
+import {
+  ComfyWorkflowGraph,
+  ExtractedParameter,
+  GeneratedMedia,
+  GenerationHistoryItem,
+} from "./types/workflow";
+import { parseWorkflowParameters } from "./lib/workflowParser";
+import {
+  injectWorkflowParameters,
+  generateRandomSeed,
+} from "./lib/workflowInjector";
+import {
+  testComfyConnection,
+  queuePrompt,
+  pollPromptCompletion,
+  ComfyConnectionTestResult,
+} from "./lib/comfyClient";
+import {
+  loadSavedEndpoint,
+  saveEndpoint,
+  loadEndpointHistory,
+  loadGenerationHistory,
+  saveGenerationItem,
+  clearGenerationHistory,
+  loadCustomPresets,
+  saveCustomPreset,
+  WorkflowPreset,
+  DEFAULT_ENDPOINT,
+} from "./lib/storage";
+
+// Components
+import { Navbar } from "./components/Navbar";
+import { EndpointBar } from "./components/EndpointBar";
+import { WorkflowBar } from "./components/WorkflowBar";
+import { DynamicForm } from "./components/DynamicForm/DynamicForm";
+import { OutputGallery } from "./components/OutputGallery";
+import { CodeExportModal } from "./components/CodeExportModal";
+import { GraphInspectorModal } from "./components/GraphInspectorModal";
+
+export const App: React.FC = () => {
+  // 1. Endpoint & Connection State
+  const [endpoint, setEndpoint] = useState<string>(loadSavedEndpoint());
+  const [endpointHistory, setEndpointHistory] = useState<string[]>(loadEndpointHistory());
+  const [connectionStatus, setConnectionStatus] = useState<ComfyConnectionTestResult | null>(null);
+  const [isTestingConnection, setIsTestingConnection] = useState<boolean>(false);
+
+  // 2. Workflow & Dynamic Parameters State
+  const [workflowGraph, setWorkflowGraph] = useState<ComfyWorkflowGraph>({});
+  const [parameters, setParameters] = useState<ExtractedParameter[]>([]);
+  const [randomizeSeedOnGenerate, setRandomizeSeedOnGenerate] = useState<boolean>(true);
+  const [currentWorkflowName, setCurrentWorkflowName] = useState<string>("Anima Base v1.0");
+
+  // Presets
+  const [presets, setPresets] = useState<WorkflowPreset[]>([]);
+  const [activePresetId, setActivePresetId] = useState<string>("anima-base");
+
+  // 3. Execution & Media Generation State
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [progressPercent, setProgressPercent] = useState<number>(0);
+  const [statusText, setStatusText] = useState<string>("");
+  const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
+  const [currentMedia, setCurrentMedia] = useState<GeneratedMedia | null>(null);
+  const [history, setHistory] = useState<GenerationHistoryItem[]>(loadGenerationHistory());
+
+  // 4. Modals
+  const [showExportModal, setShowExportModal] = useState<boolean>(false);
+  const [showGraphModal, setShowGraphModal] = useState<boolean>(false);
+
+  // Load initial preset workflow
+  useEffect(() => {
+    async function initWorkflow() {
+      try {
+        const res = await fetch("/workflows/anima-base-api.json");
+        const json: ComfyWorkflowGraph = await res.json();
+        setWorkflowGraph(json);
+        const parsed = parseWorkflowParameters(json);
+        setParameters(parsed);
+
+        const defaultPreset: WorkflowPreset = {
+          id: "anima-base",
+          name: "Anima Base (T2I)",
+          description: "Anima Base Text-to-Image with LoRA",
+          workflowJson: JSON.stringify(json),
+        };
+
+        const custom = loadCustomPresets();
+        setPresets([defaultPreset, ...custom]);
+      } catch (err) {
+        console.error("Failed to load initial workflow:", err);
+      }
+    }
+
+    initWorkflow();
+  }, []);
+
+  // Ping endpoint on start
+  const handleTestConnection = useCallback(async (targetEndpoint?: string) => {
+    const url = (targetEndpoint || endpoint).trim();
+    if (!url) return;
+
+    setIsTestingConnection(true);
+    const result = await testComfyConnection(url);
+    setConnectionStatus(result);
+    setIsTestingConnection(false);
+
+    if (result.ok) {
+      saveEndpoint(url);
+      setEndpointHistory(loadEndpointHistory());
+    }
+  }, [endpoint]);
+
+  useEffect(() => {
+    if (endpoint) {
+      handleTestConnection(endpoint);
+    }
+  }, []);
+
+  // Update a single parameter value
+  const handleParameterChange = (paramId: string, value: any) => {
+    setParameters((prev) =>
+      prev.map((p) => (p.id === paramId ? { ...p, currentValue: value } : p))
+    );
+  };
+
+  // Reset parameters to original defaults from workflow JSON
+  const handleResetParams = () => {
+    setParameters((prev) =>
+      prev.map((p) => ({ ...p, currentValue: p.defaultValue }))
+    );
+  };
+
+  // Switch presets
+  const handleSelectPreset = (presetId: string) => {
+    const found = presets.find((p) => p.id === presetId);
+    if (found) {
+      try {
+        const json: ComfyWorkflowGraph = JSON.parse(found.workflowJson);
+        setWorkflowGraph(json);
+        const parsed = parseWorkflowParameters(json);
+        setParameters(parsed);
+        setActivePresetId(presetId);
+        setCurrentWorkflowName(found.name);
+      } catch (err) {
+        console.error("Failed to parse preset JSON:", err);
+      }
+    }
+  };
+
+  // Upload custom workflow JSON file
+  const handleUploadWorkflowFile = async (file: File) => {
+    try {
+      const text = await file.text();
+      const json: ComfyWorkflowGraph = JSON.parse(text);
+      const name = file.name.replace(/\.json$/i, "");
+
+      setWorkflowGraph(json);
+      const parsed = parseWorkflowParameters(json);
+      setParameters(parsed);
+      setCurrentWorkflowName(name);
+
+      // Create new preset
+      const newPreset: WorkflowPreset = {
+        id: `custom_${Date.now()}`,
+        name,
+        description: "Uploaded custom workflow",
+        workflowJson: text,
+        isCustom: true,
+      };
+
+      saveCustomPreset(newPreset);
+      setPresets((prev) => [newPreset, ...prev]);
+      setActivePresetId(newPreset.id);
+    } catch (err: any) {
+      alert("Invalid ComfyUI workflow JSON: " + err.message);
+    }
+  };
+
+  // Paste custom workflow JSON
+  const handlePasteWorkflowJson = (jsonStr: string, name?: string) => {
+    try {
+      const json: ComfyWorkflowGraph = JSON.parse(jsonStr);
+      const presetName = name || `Custom ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+
+      setWorkflowGraph(json);
+      const parsed = parseWorkflowParameters(json);
+      setParameters(parsed);
+      setCurrentWorkflowName(presetName);
+
+      const newPreset: WorkflowPreset = {
+        id: `custom_${Date.now()}`,
+        name: presetName,
+        description: "Pasted custom workflow",
+        workflowJson: jsonStr,
+        isCustom: true,
+      };
+
+      saveCustomPreset(newPreset);
+      setPresets((prev) => [newPreset, ...prev]);
+      setActivePresetId(newPreset.id);
+    } catch (err: any) {
+      alert("Invalid ComfyUI workflow JSON: " + err.message);
+    }
+  };
+
+  // Download current injected workflow JSON
+  const handleExportWorkflowJson = () => {
+    const injected = injectWorkflowParameters(workflowGraph, parameters);
+    const blob = new Blob([JSON.stringify(injected, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${currentWorkflowName.toLowerCase().replace(/\s+/g, "-")}-api.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  // Execute Generation
+  const handleGenerate = async () => {
+    if (isGenerating) return;
+    if (!endpoint.trim()) {
+      setErrorMessage("Please enter your ComfyUI relay endpoint URL first.");
+      return;
+    }
+
+    setErrorMessage(undefined);
+    setIsGenerating(true);
+    setProgressPercent(5);
+    setStatusText("Preparing workflow...");
+
+    const startTime = Date.now();
+    let currentParams = [...parameters];
+
+    // Roll random seed if enabled
+    if (randomizeSeedOnGenerate) {
+      const newSeed = generateRandomSeed();
+      currentParams = currentParams.map((p) =>
+        p.inputKey === "seed" || p.inputKey === "noise_seed"
+          ? { ...p, currentValue: newSeed }
+          : p
+      );
+      setParameters(currentParams);
+    }
+
+    try {
+      // 1. Inject parameters into graph
+      const injectedWorkflow = injectWorkflowParameters(workflowGraph, currentParams);
+      const clientId = `universal_studio_${Math.random().toString(36).substring(2, 9)}`;
+
+      // 2. Queue prompt
+      setStatusText("Submitting to ComfyUI relay...");
+      setProgressPercent(15);
+      const queueRes = await queuePrompt(endpoint, injectedWorkflow, clientId);
+
+      if (!queueRes || !queueRes.prompt_id) {
+        throw new Error("No prompt_id returned from ComfyUI /prompt endpoint.");
+      }
+
+      setStatusText("Queued in GPU pipeline...");
+      setProgressPercent(25);
+
+      // 3. Poll for completion
+      const mediaOutputs = await pollPromptCompletion(
+        endpoint,
+        queueRes.prompt_id,
+        (pct, text) => {
+          setProgressPercent(Math.max(25, pct));
+          setStatusText(text);
+        }
+      );
+
+      if (!mediaOutputs || mediaOutputs.length === 0) {
+        throw new Error("Generation completed but no output images or videos were found.");
+      }
+
+      // 4. Update result
+      const firstMedia = mediaOutputs[0];
+      setCurrentMedia(firstMedia);
+      setProgressPercent(100);
+      setStatusText("Completed!");
+
+      // 5. Save to local history
+      const durationMs = Date.now() - startTime;
+      const historyItem: GenerationHistoryItem = {
+        id: `gen_${Date.now()}`,
+        promptId: queueRes.prompt_id,
+        timestamp: Date.now(),
+        status: "completed",
+        progress: 100,
+        workflowName: currentWorkflowName,
+        parameters: Object.fromEntries(
+          currentParams.map((p) => [p.inputKey, p.currentValue])
+        ),
+        outputs: mediaOutputs,
+        durationMs,
+      };
+
+      saveGenerationItem(historyItem);
+      setHistory(loadGenerationHistory());
+    } catch (err: any) {
+      console.error("Generation failed:", err);
+      setErrorMessage(err.message || "Failed to generate image.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Keyboard shortcut: Ctrl+Enter / Cmd+Enter to generate
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        handleGenerate();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleGenerate]);
+
+  // Restore history item parameters into form
+  const handleSelectHistoryItem = (item: GenerationHistoryItem) => {
+    if (item.outputs && item.outputs.length > 0) {
+      setCurrentMedia(item.outputs[0]);
+    }
+    // Optionally restore parameters
+    if (item.parameters) {
+      setParameters((prev) =>
+        prev.map((p) => {
+          if (p.inputKey in item.parameters) {
+            return { ...p, currentValue: item.parameters[p.inputKey] };
+          }
+          return p;
+        })
+      );
+    }
+  };
+
+  const handleClearHistory = () => {
+    if (confirm("Clear all generation history?")) {
+      clearGenerationHistory();
+      setHistory([]);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col bg-zinc-950 font-sans selection:bg-indigo-600 selection:text-white">
+      {/* Top Navbar */}
+      <Navbar
+        connectionStatus={connectionStatus}
+        isTestingConnection={isTestingConnection}
+        onOpenExport={() => setShowExportModal(true)}
+        onOpenGraph={() => setShowGraphModal(true)}
+        onResetParams={handleResetParams}
+      />
+
+      {/* Main Workspace Layout */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col gap-5">
+        {/* Endpoint Bar */}
+        <EndpointBar
+          endpoint={endpoint}
+          onEndpointChange={(val) => {
+            setEndpoint(val);
+            saveEndpoint(val);
+          }}
+          onTestConnection={() => handleTestConnection()}
+          isTesting={isTestingConnection}
+          connectionResult={connectionStatus}
+          endpointHistory={endpointHistory}
+        />
+
+        {/* Workflow Switcher & File Dropzone */}
+        <WorkflowBar
+          currentWorkflowName={currentWorkflowName}
+          presets={presets}
+          activePresetId={activePresetId}
+          onSelectPreset={handleSelectPreset}
+          onUploadWorkflowFile={handleUploadWorkflowFile}
+          onPasteWorkflowJson={handlePasteWorkflowJson}
+          onExportWorkflowJson={handleExportWorkflowJson}
+        />
+
+        {/* Split Studio: Parameters Left / Canvas Output Right */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Left Column: Dynamic Parameter Form */}
+          <div className="lg:col-span-7 flex flex-col gap-4">
+            {/* Generate Primary Button */}
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={isGenerating}
+              className="w-full relative group overflow-hidden py-3.5 px-6 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 text-white font-bold text-sm sm:text-base shadow-xl shadow-indigo-500/25 transition-all duration-200 active:scale-[0.99] flex items-center justify-center gap-2"
+            >
+              <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+              {isGenerating ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>{statusText || "Generating..."}</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-5 h-5 fill-white text-white" />
+                  <span>Generate Image</span>
+                  <span className="text-xs opacity-75 font-normal ml-1">
+                    (Ctrl+Enter)
+                  </span>
+                </>
+              )}
+            </button>
+
+            {/* Dynamic Form Controls */}
+            <DynamicForm
+              parameters={parameters}
+              onParameterChange={handleParameterChange}
+              randomizeSeedOnGenerate={randomizeSeedOnGenerate}
+              onToggleRandomizeSeed={setRandomizeSeedOnGenerate}
+              endpoint={endpoint}
+            />
+          </div>
+
+          {/* Right Column: Output Viewer & History */}
+          <div className="lg:col-span-5 sticky top-20 flex flex-col gap-4">
+            <OutputGallery
+              currentMedia={currentMedia}
+              history={history}
+              isGenerating={isGenerating}
+              progressPercent={progressPercent}
+              statusText={statusText}
+              errorMessage={errorMessage}
+              onSelectHistoryItem={handleSelectHistoryItem}
+              onClearHistory={handleClearHistory}
+            />
+          </div>
+        </div>
+      </main>
+
+      {/* Code Export Modal */}
+      <CodeExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        endpoint={endpoint}
+        workflowGraph={workflowGraph}
+        parameters={parameters}
+      />
+
+      {/* Graph Inspector Modal */}
+      <GraphInspectorModal
+        isOpen={showGraphModal}
+        onClose={() => setShowGraphModal(false)}
+        workflowGraph={workflowGraph}
+      />
+    </div>
+  );
+};
