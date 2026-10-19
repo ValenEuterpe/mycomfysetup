@@ -32,6 +32,34 @@ export interface ComfyHistoryResult {
 }
 
 /**
+ * Extracts any auth token from the endpoint query parameters (like ?key= or ?token=).
+ */
+export function extractAuthKey(endpoint: string): string | null {
+  try {
+    const trimmed = endpoint.trim();
+    const urlStr = trimmed.startsWith("http://") || trimmed.startsWith("https://")
+      ? trimmed
+      : `https://${trimmed}`;
+    const url = new URL(urlStr);
+    return url.searchParams.get("key") || url.searchParams.get("token") || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Returns standard auth headers if a key is present in the endpoint URL.
+ */
+export function getAuthHeaders(endpoint: string): Record<string, string> {
+  const key = extractAuthKey(endpoint);
+  if (!key) return {};
+  return {
+    Authorization: `Bearer ${key}`,
+    "X-Api-Key": key,
+  };
+}
+
+/**
  * Parses and builds URLs for arbitrary ComfyUI endpoints or Cloudflare Worker relays.
  */
 export function buildComfyUrl(endpoint: string, path: string, extraParams: Record<string, string> = {}): string {
@@ -45,9 +73,12 @@ export function buildComfyUrl(endpoint: string, path: string, extraParams: Recor
       : `https://${trimmed}`;
 
     const url = new URL(urlStr);
-    const basePath = url.pathname.replace(/\/+$/, "");
-    const cleanSubPath = path.startsWith("/") ? path : `/${path}`;
 
+    // Normalize base path: strip trailing slashes AND redundant endpoint suffixes (e.g. /prompt, /view)
+    let basePath = url.pathname.replace(/\/+$/, "");
+    basePath = basePath.replace(/\/(prompt|history|view|upload|queue|system_stats)$/i, "");
+
+    const cleanSubPath = path.startsWith("/") ? path : `/${path}`;
     url.pathname = `${basePath}${cleanSubPath}`;
 
     // Append extra query params while preserving existing ones (like ?key=...)
@@ -90,7 +121,10 @@ export function buildWsUrl(endpoint: string, clientId: string): string {
     const url = new URL(urlStr);
     const isSecure = url.protocol === "https:";
     url.protocol = isSecure ? "wss:" : "ws:";
-    const basePath = url.pathname.replace(/\/+$/, "");
+
+    let basePath = url.pathname.replace(/\/+$/, "");
+    basePath = basePath.replace(/\/(prompt|history|view|upload|queue|system_stats)$/i, "");
+
     url.pathname = `${basePath}/ws`;
     url.searchParams.set("clientId", clientId);
     return url.toString();
@@ -122,12 +156,21 @@ async function comfyFetch(url: string, init?: RequestInit): Promise<Response> {
 export async function testComfyConnection(endpoint: string): Promise<ComfyConnectionTestResult> {
   const start = performance.now();
   try {
-    // Try /system_stats first, fallback to /prompt or /queue
     const targetUrl = buildComfyUrl(endpoint, "/prompt");
-    const res = await comfyFetch(targetUrl, { method: "GET", cache: "no-store" });
+    const headers = { ...getAuthHeaders(endpoint) };
+    const res = await comfyFetch(targetUrl, { method: "GET", headers, cache: "no-store" });
 
     const latencyMs = Math.round(performance.now() - start);
-    if (!res.ok && res.status !== 405 && res.status !== 401) {
+
+    if (res.status === 403 || res.status === 401) {
+      return {
+        ok: false,
+        message: `Authentication required (${res.status} Forbidden). Check your ?key= parameter.`,
+        latencyMs,
+      };
+    }
+
+    if (!res.ok && res.status !== 405) {
       return {
         ok: false,
         message: `Endpoint responded with status ${res.status} (${res.statusText})`,
@@ -167,8 +210,11 @@ export async function uploadImageToComfy(
   form.append("image", file);
   form.append("overwrite", "true");
 
+  const headers = { ...getAuthHeaders(endpoint) };
+
   const res = await comfyFetch(targetUrl, {
     method: "POST",
+    headers,
     body: form,
   });
 
@@ -189,15 +235,26 @@ export async function queuePrompt(
   clientId: string
 ): Promise<PromptQueueResponse> {
   const targetUrl = buildComfyUrl(endpoint, "/prompt");
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...getAuthHeaders(endpoint),
+  };
+
   const res = await comfyFetch(targetUrl, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({ prompt: workflow, client_id: clientId }),
   });
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`ComfyUI /prompt failed (${res.status}): ${text}`);
+    let errorMessage = `ComfyUI /prompt failed (${res.status}): ${text || res.statusText}`;
+    if (res.status === 403 || res.status === 401) {
+      errorMessage = `Authentication failed (${res.status} Forbidden). Please verify your relay '?key=' parameter.`;
+    } else if (res.status === 404) {
+      errorMessage = `ComfyUI route not found (404) at ${targetUrl}. Please verify your relay URL.`;
+    }
+    throw new Error(errorMessage);
   }
 
   return res.json();
@@ -211,7 +268,9 @@ export async function getHistory(
   promptId: string
 ): Promise<Record<string, ComfyHistoryResult>> {
   const targetUrl = buildComfyUrl(endpoint, `/history/${promptId}`);
-  const res = await comfyFetch(targetUrl, { cache: "no-store" });
+  const headers = { ...getAuthHeaders(endpoint) };
+
+  const res = await comfyFetch(targetUrl, { headers, cache: "no-store" });
 
   if (!res.ok) {
     throw new Error(`ComfyUI /history failed (${res.status})`);
