@@ -431,6 +431,7 @@ export const App: React.FC = () => {
               progressPercent={progressPercent}
               statusText={statusText}
               errorMessage={errorMessage}
+              endpoint={endpoint}
               onSelectHistoryItem={handleSelectHistoryItem}
               onClearHistory={handleClearHistory}
             />

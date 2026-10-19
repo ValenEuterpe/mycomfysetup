@@ -280,6 +280,35 @@ export async function getHistory(
 }
 
 /**
+ * Fetches an output image or video from ComfyUI /view using authenticated fetch
+ * and returns a local object URL (blob:...) that renders and downloads cleanly in the browser.
+ */
+export async function fetchComfyMediaBlob(
+  endpoint: string,
+  filename: string,
+  subfolder: string = "",
+  type: string = "output"
+): Promise<{ blob: Blob; localUrl: string }> {
+  const targetUrl = buildViewUrl(endpoint, filename, subfolder, type);
+  const headers = { ...getAuthHeaders(endpoint) };
+
+  const res = await comfyFetch(targetUrl, {
+    method: "GET",
+    headers,
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to fetch media from ComfyUI /view (${res.status}): ${text || res.statusText}`);
+  }
+
+  const blob = await res.blob();
+  const localUrl = URL.createObjectURL(blob);
+  return { blob, localUrl };
+}
+
+/**
  * Polls for completion of a prompt and parses output images/videos.
  */
 export async function pollPromptCompletion(
@@ -303,11 +332,19 @@ export async function pollPromptCompletion(
           // Images
           if (Array.isArray(output.images)) {
             for (const img of output.images) {
+              let displayUrl = buildViewUrl(endpoint, img.filename, img.subfolder, img.type);
+              try {
+                const fetched = await fetchComfyMediaBlob(endpoint, img.filename, img.subfolder, img.type);
+                displayUrl = fetched.localUrl;
+              } catch (blobErr) {
+                console.warn("Could not fetch media blob, using direct URL:", blobErr);
+              }
+
               media.push({
                 filename: img.filename,
                 subfolder: img.subfolder || "",
                 type: img.type || "output",
-                url: buildViewUrl(endpoint, img.filename, img.subfolder, img.type),
+                url: displayUrl,
                 mimeType: "image",
               });
             }
@@ -316,11 +353,19 @@ export async function pollPromptCompletion(
           const videoItems = output.videos || output.gifs;
           if (Array.isArray(videoItems)) {
             for (const vid of videoItems) {
+              let displayUrl = buildViewUrl(endpoint, vid.filename, vid.subfolder, vid.type);
+              try {
+                const fetched = await fetchComfyMediaBlob(endpoint, vid.filename, vid.subfolder, vid.type);
+                displayUrl = fetched.localUrl;
+              } catch (blobErr) {
+                console.warn("Could not fetch media blob, using direct URL:", blobErr);
+              }
+
               media.push({
                 filename: vid.filename,
                 subfolder: vid.subfolder || "",
                 type: vid.type || "output",
-                url: buildViewUrl(endpoint, vid.filename, vid.subfolder, vid.type),
+                url: displayUrl,
                 mimeType: "video",
               });
             }

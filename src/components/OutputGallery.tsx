@@ -1,18 +1,19 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Download,
   Copy,
   Check,
   Maximize2,
-  Clock,
   Sparkles,
   AlertCircle,
   Film,
   Image as ImageIcon,
   History,
   Trash2,
+  RefreshCw,
 } from "lucide-react";
 import { GeneratedMedia, GenerationHistoryItem } from "../types/workflow";
+import { fetchComfyMediaBlob } from "../lib/comfyClient";
 
 interface OutputGalleryProps {
   currentMedia: GeneratedMedia | null;
@@ -21,6 +22,7 @@ interface OutputGalleryProps {
   progressPercent: number;
   statusText: string;
   errorMessage?: string;
+  endpoint: string;
   onSelectHistoryItem: (item: GenerationHistoryItem) => void;
   onClearHistory: () => void;
 }
@@ -32,35 +34,128 @@ export const OutputGallery: React.FC<OutputGalleryProps> = ({
   progressPercent,
   statusText,
   errorMessage,
+  endpoint,
   onSelectHistoryItem,
   onClearHistory,
 }) => {
   const [copied, setCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
+  const [isResolvingBlob, setIsResolvingBlob] = useState(false);
+  const [blobError, setBlobError] = useState<string | null>(null);
+
+  // When currentMedia changes, resolve blob URL if needed
+  useEffect(() => {
+    if (!currentMedia) {
+      setResolvedUrl(null);
+      setBlobError(null);
+      return;
+    }
+
+    if (currentMedia.url.startsWith("blob:") || currentMedia.url.startsWith("data:")) {
+      setResolvedUrl(currentMedia.url);
+      setBlobError(null);
+      return;
+    }
+
+    // Attempt authenticated blob fetch
+    let active = true;
+    setIsResolvingBlob(true);
+    setBlobError(null);
+
+    fetchComfyMediaBlob(
+      endpoint,
+      currentMedia.filename,
+      currentMedia.subfolder,
+      currentMedia.type
+    )
+      .then(({ localUrl }) => {
+        if (active) {
+          setResolvedUrl(localUrl);
+          setIsResolvingBlob(false);
+        }
+      })
+      .catch((err) => {
+        if (active) {
+          console.warn("Failed to resolve blob URL:", err);
+          // Fall back to original URL
+          setResolvedUrl(currentMedia.url);
+          setIsResolvingBlob(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [currentMedia, endpoint]);
+
+  const handleImageError = async () => {
+    if (!currentMedia || isResolvingBlob) return;
+    try {
+      setIsResolvingBlob(true);
+      const { localUrl } = await fetchComfyMediaBlob(
+        endpoint,
+        currentMedia.filename,
+        currentMedia.subfolder,
+        currentMedia.type
+      );
+      setResolvedUrl(localUrl);
+      setBlobError(null);
+    } catch (err: any) {
+      setBlobError(err.message || "Could not load image bytes");
+    } finally {
+      setIsResolvingBlob(false);
+    }
+  };
 
   const copyUrl = () => {
-    if (currentMedia?.url) {
-      navigator.clipboard.writeText(currentMedia.url);
+    const urlToCopy = resolvedUrl || currentMedia?.url;
+    if (urlToCopy) {
+      navigator.clipboard.writeText(urlToCopy);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
   };
 
-  const handleDownload = () => {
-    if (currentMedia?.url) {
+  const handleDownload = async () => {
+    if (!currentMedia) return;
+    try {
+      let downloadUrl = resolvedUrl || currentMedia.url;
+
+      if (!downloadUrl.startsWith("blob:") && !downloadUrl.startsWith("data:")) {
+        const fetched = await fetchComfyMediaBlob(
+          endpoint,
+          currentMedia.filename,
+          currentMedia.subfolder,
+          currentMedia.type
+        );
+        downloadUrl = fetched.localUrl;
+        setResolvedUrl(downloadUrl);
+      }
+
       const a = document.createElement("a");
-      a.href = currentMedia.url;
+      a.href = downloadUrl;
       a.download = currentMedia.filename || "generated-image.png";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+    } catch (err: any) {
+      alert("Failed to download image: " + err.message);
     }
   };
+
+  const activeMediaUrl = resolvedUrl || currentMedia?.url;
 
   return (
     <div className="flex flex-col gap-4">
       {/* Main View Area */}
-      <div className="relative bg-zinc-900/90 border border-zinc-800 rounded-2xl overflow-hidden aspect-square flex items-center justify-center shadow-xl">
+      <div
+        className={`relative bg-zinc-900/90 border border-zinc-800 rounded-2xl overflow-hidden aspect-square flex items-center justify-center shadow-xl transition-all ${
+          isFullscreen
+            ? "fixed inset-4 z-50 aspect-auto bg-black/95 backdrop-blur-xl"
+            : ""
+        }`}
+      >
         {/* Generating overlay */}
         {isGenerating && (
           <div className="absolute inset-0 z-20 bg-zinc-950/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-in fade-in">
@@ -100,11 +195,16 @@ export const OutputGallery: React.FC<OutputGalleryProps> = ({
         )}
 
         {/* Media Display */}
-        {currentMedia && !isGenerating ? (
+        {currentMedia && !isGenerating && activeMediaUrl ? (
           <div className="relative w-full h-full group flex items-center justify-center">
-            {currentMedia.mimeType === "video" ? (
+            {isResolvingBlob ? (
+              <div className="flex flex-col items-center justify-center gap-2 text-zinc-400">
+                <RefreshCw className="w-6 h-6 animate-spin text-indigo-400" />
+                <span className="text-xs font-mono">Loading image bytes...</span>
+              </div>
+            ) : currentMedia.mimeType === "video" ? (
               <video
-                src={currentMedia.url}
+                src={activeMediaUrl}
                 controls
                 autoPlay
                 loop
@@ -112,14 +212,15 @@ export const OutputGallery: React.FC<OutputGalleryProps> = ({
               />
             ) : (
               <img
-                src={currentMedia.url}
+                src={activeMediaUrl}
                 alt="Generated Output"
+                onError={handleImageError}
                 className="max-h-full max-w-full object-contain rounded-xl"
               />
             )}
 
             {/* Hover Actions Toolbar */}
-            <div className="absolute top-3 right-3 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-950/80 backdrop-blur-md p-1.5 rounded-xl border border-zinc-800 shadow-lg">
+            <div className="absolute top-3 right-3 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-950/80 backdrop-blur-md p-1.5 rounded-xl border border-zinc-800 shadow-lg z-10">
               <button
                 type="button"
                 onClick={handleDownload}
@@ -151,6 +252,13 @@ export const OutputGallery: React.FC<OutputGalleryProps> = ({
                 <Maximize2 className="w-4 h-4" />
               </button>
             </div>
+
+            {blobError && (
+              <div className="absolute bottom-3 left-3 right-3 bg-rose-950/90 border border-rose-900/50 p-2.5 rounded-xl text-xs text-rose-300 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span className="truncate">{blobError}</span>
+              </div>
+            )}
           </div>
         ) : !isGenerating && !errorMessage ? (
           <div className="text-center p-8 text-zinc-500 flex flex-col items-center">
@@ -196,7 +304,7 @@ export const OutputGallery: React.FC<OutputGalleryProps> = ({
             {history.map((item) => {
               const firstOutput = item.outputs[0];
               const isSelected =
-                firstOutput && currentMedia?.url === firstOutput.url;
+                firstOutput && currentMedia?.filename === firstOutput.filename;
 
               return (
                 <div
