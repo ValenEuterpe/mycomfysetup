@@ -32,7 +32,7 @@ import {
 
 // Components
 import { Navbar } from "./components/Navbar";
-import { EndpointBar } from "./components/EndpointBar";
+import { SettingsModal } from "./components/SettingsModal";
 import { WorkflowBar } from "./components/WorkflowBar";
 import { DynamicForm } from "./components/DynamicForm/DynamicForm";
 import { OutputGallery } from "./components/OutputGallery";
@@ -65,6 +65,7 @@ export const App: React.FC = () => {
   const [history, setHistory] = useState<GenerationHistoryItem[]>(loadGenerationHistory());
 
   // 4. Modals
+  const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [showGraphModal, setShowGraphModal] = useState<boolean>(false);
 
@@ -353,6 +354,7 @@ export const App: React.FC = () => {
       <Navbar
         connectionStatus={connectionStatus}
         isTestingConnection={isTestingConnection}
+        onOpenSettings={() => setShowSettingsModal(true)}
         onOpenExport={() => setShowExportModal(true)}
         onOpenGraph={() => setShowGraphModal(true)}
         onResetParams={handleResetParams}
@@ -360,19 +362,6 @@ export const App: React.FC = () => {
 
       {/* Main Workspace Layout */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col gap-5">
-        {/* Endpoint Bar */}
-        <EndpointBar
-          endpoint={endpoint}
-          onEndpointChange={(val) => {
-            setEndpoint(val);
-            saveEndpoint(val);
-          }}
-          onTestConnection={() => handleTestConnection()}
-          isTesting={isTestingConnection}
-          connectionResult={connectionStatus}
-          endpointHistory={endpointHistory}
-        />
-
         {/* Workflow Switcher & File Dropzone */}
         <WorkflowBar
           currentWorkflowName={currentWorkflowName}
@@ -438,6 +427,21 @@ export const App: React.FC = () => {
           </div>
         </div>
       </main>
+
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        endpoint={endpoint}
+        onEndpointChange={(val) => {
+          setEndpoint(val);
+          saveEndpoint(val);
+        }}
+        onTestConnection={() => handleTestConnection()}
+        isTesting={isTestingConnection}
+        connectionResult={connectionStatus}
+        endpointHistory={endpointHistory}
+      />
 
       {/* Code Export Modal */}
       <CodeExportModal

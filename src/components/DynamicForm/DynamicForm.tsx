@@ -52,6 +52,16 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
         />
       )}
 
+      {/* Media / Image Uploads (Placed right under Resolution block) */}
+      {mediaParams.map((param) => (
+        <MediaUploadField
+          key={param.id}
+          param={param}
+          endpoint={endpoint}
+          onChange={(val) => onParameterChange(param.id, val)}
+        />
+      ))}
+
       {/* Sampler Controls */}
       {samplerParams.length > 0 && (
         <SamplerField
@@ -61,16 +71,6 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
           onToggleRandomizeSeed={onToggleRandomizeSeed}
         />
       )}
-
-      {/* Media Uploads */}
-      {mediaParams.map((param) => (
-        <MediaUploadField
-          key={param.id}
-          param={param}
-          endpoint={endpoint}
-          onChange={(val) => onParameterChange(param.id, val)}
-        />
-      ))}
 
       {/* Model & Checkpoints (if present) */}
       {modelParams.length > 0 && (

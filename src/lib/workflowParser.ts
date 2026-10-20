@@ -242,12 +242,12 @@ export function parseWorkflowParameters(graph: ComfyWorkflowGraph): ExtractedPar
   }
 
   // Sort parameters logically:
-  // Prompts (Positive first, Negative second) -> Dimensions -> Sampler -> Media -> Models -> Primitives -> Generic
+  // Prompts (Positive first, Negative second) -> Dimensions -> Media -> Sampler -> Models -> Primitives -> Generic
   const categoryOrder: Record<ParameterCategory, number> = {
     prompt: 1,
     dimension: 2,
-    sampler: 3,
-    media: 4,
+    media: 3,
+    sampler: 4,
     model: 5,
     primitive: 6,
     generic: 7,
