@@ -12,6 +12,8 @@ export interface Env {
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_WEBHOOK_SECRET?: string; // optional webhook secret token header
   TELEGRAM_CHAT_ID?: string; // default chat for page-driven delivery
+  // Per-bot-user settings storage (model / ratio / prefill / negative)
+  TELEGRAM_SETTINGS?: KVNamespace;
   [key: string]: unknown;
 }
 
@@ -134,7 +136,7 @@ export async function pollForCompletion(
       const res = await fetch(relayUrl(endpoint, `/history/${promptId}`), {
         method: "GET",
         headers: endpoint.headers,
-        cache: "no-store",
+        cf: { cacheTtl: 0 },
       });
       if (!res.ok) continue;
 
@@ -184,7 +186,7 @@ export async function fetchMediaBlob(
   const res = await fetch(relayUrl(endpoint, "/view", params), {
     method: "GET",
     headers: endpoint.headers,
-    cache: "no-store",
+    cf: { cacheTtl: 0 },
   });
   if (!res.ok) {
     throw new Error(`Failed to fetch media from /view (${res.status})`);

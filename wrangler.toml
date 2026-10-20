@@ -2,3 +2,7 @@ name = "nsfwimage"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "dist"
+
+[[kv_namespaces]]
+binding = "TELEGRAM_SETTINGS"
+id = "2c5fc0efe5b04122a40ec921be5cc780"

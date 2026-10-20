@@ -46,8 +46,10 @@ A lightweight, serverless, universal web studio and dynamic API exporter for **C
   - The ComfyUI relay URL and key live in Cloudflare secrets (`COMFY_RELAY_URL`, `COMFY_RELAY_KEY`) and are delivered to the (already authenticated) browser via `/api/config`.
 
 - **Telegram Bot Generation**:
-  - Generate directly from Telegram via `/gen [model] <positive> [| negative]`.
-  - Ships with two built-in workflows: **anima** (Anima Base T2I, supports negative prompt) and **kroma** (Krea-2 generate + upscale, no negative prompt — it is zeroed out by design at cfg 1).
+  - Generate directly from Telegram — just send any text, or use `/gen [model] <positive> [| negative]`.
+  - Ships with two built-in workflows: **anima** (Anima Base T2I, supports negative prompt + prefill) and **kroma** (Krea-2 generate + upscale, no negative prompt — it is zeroed out by design at cfg 1).
+  - Per-user persistent settings (model, aspect ratio, anima prefill / negative prompt) stored in the `TELEGRAM_SETTINGS` KV namespace — "set once, use until changed".
+  - Styled inline-keyboard UI: settings panel, model & ratio pickers, ForceReply prompt editing, live status updates, Regenerate button.
   - Finished images are uploaded straight into the chat by the worker.
 
 - **Delivery Toggles**:
@@ -116,24 +118,37 @@ npx wrangler pages secret put TELEGRAM_BOT_TOKEN --project-name=nsfwimage
 ## Telegram Bot Setup
 
 1. Create a bot with [@BotFather](https://t.me/BotFather) and copy the token into `TELEGRAM_BOT_TOKEN`.
-2. After deployment, register the webhook once (replace the token and your site URL):
+2. Bind the settings KV namespace (per-user settings persistence). The binding is already declared in `wrangler.toml`; if you redeploy to a different Cloudflare account, recreate it:
+
+   ```bash
+   npx wrangler kv namespace create TELEGRAM_SETTINGS
+   # then put the returned id into wrangler.toml under [[kv_namespaces]]
+   ```
+
+3. After deployment, register the webhook once (replace the token and your site URL):
 
    ```bash
    curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=https://YOUR-SITE.pages.dev/api/telegram"
    ```
 
-3. In your chat, use:
-   - `/start` — help
-   - `/models` — list the two built-in workflows
-   - `/gen anima a dog in the street | blurry, low quality`
-   - `/gen kroma a man in a cabriolet car`
+4. In your chat:
+   - `/start` — welcome + quick access to settings
+   - any plain text — generate instantly using your saved settings
+   - `/settings` — settings panel (model, ratio, prefill, negative)
+   - `/models` or `/model anima` — pick / set the model (persisted)
+   - `/ratio 16:9` or `/ratio` — set the aspect ratio via picker (persisted)
+   - `/prefill` — edit the anima prefill (ForceReply dialog; `reset` / `(clear)` supported)
+   - `/negative` — edit the anima negative prompt (same flow)
+   - `/gen kroma a man in a cabriolet car` — one-shot generation with one-shot overrides
+   - `/gen anima a dog in the street | blurry, low quality` — negative prompt for that run only
 
-   The negative prompt part (`| negative`) only applies to workflows that support it; **kroma** ignores it by design (cfg 1 with zeroed negative conditioning).
+   With **anima**, prompts become `masterpiece, best quality, score_9, score_8, safe, @silvana, <your text>` automatically (the prefill is user-editable/clearable via `/prefill`). The negative prompt (`worst quality, low quality, score_1…`) is likewise anima-only and user-editable via `/negative`. **Kroma** ignores prefill/negative by design (cfg 1 with zeroed negative conditioning) but supports aspect ratio.
 
 ### Bot-driven server flow
 
 ```
-Telegram /gen  ->  /api/telegram (Pages Function)
+Telegram message -> /api/telegram (Pages Function)
+                   loads per-chat settings from TELEGRAM_SETTINGS KV
                    builds workflow from functions/lib/workflows.ts registry
                    -> POST relay /prompt -> poll /history -> GET /view
                    -> sendPhoto / sendDocument to the chat

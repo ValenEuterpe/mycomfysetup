@@ -11,8 +11,59 @@ export interface WorkflowInjectSpec {
   negativeKey: string;
   /** Fork ids to receive the generated seed */
   seedNodes: { node: string; key: string }[];
-  /** Optional width/height injection (node must contain literal width/height inputs) */
-  sizeNode?: { node: string; widthKey: string; heightKey: string };
+  /**
+   * Latent image node whose width/height inputs can be overridden with
+   * literal values for aspect-ratio control. The literal value replaces
+   * any wired input (e.g. kroma's ResolutionSelector links).
+   */
+  latentNode: { node: string; widthKey: string; heightKey: string };
+}
+
+export interface RatioOption {
+  id: string;
+  label: string;
+  width: number;
+  height: number;
+}
+
+/**
+ * Aspect ratios offered by the bot, computed at roughly a 1-megapixel base
+ * with dimensions rounded to multiples of 8 (ComfyUI latent requirement).
+ */
+const RATIO_IDS = [
+  "1:1",
+  "3:2",
+  "2:3",
+  "4:3",
+  "3:4",
+  "16:9",
+  "9:16",
+  "16:10",
+  "10:16",
+  "21:9",
+  "9:21",
+];
+
+const round8 = (v: number) => Math.max(64, Math.round(v / 8) * 8);
+
+function dimsForRatio(rw: number, rh: number): { width: number; height: number } {
+  const area = 1024 * 1024;
+  const width = round8(Math.sqrt(area * (rw / rh)));
+  const height = round8(area / width);
+  return { width, height };
+}
+
+export const RATIO_OPTIONS: RatioOption[] = RATIO_IDS.map((id) => {
+  const [rw, rh] = id.split(":").map(Number);
+  return { id, label: id, ...dimsForRatio(rw, rh) };
+});
+
+export function listRatios(): RatioOption[] {
+  return RATIO_OPTIONS;
+}
+
+export function resolveRatio(id: string): RatioOption | undefined {
+  return RATIO_OPTIONS.find((r) => r.id === id.toLowerCase().trim());
 }
 
 export interface BotWorkflow {
@@ -22,41 +73,55 @@ export interface BotWorkflow {
   graph: ComfyWorkflowGraph;
   supportsNegativePrompt: boolean;
   supportsSize: boolean;
+  /** Optional quality/character prefix prepended to user prompts via the bot */
+  prefillDefault?: string;
+  /** Optional negative prompt fallback used when the run supplies none */
+  negativeDefault?: string;
   inject: WorkflowInjectSpec;
   /** Node ids whose history outputs contain the final media */
   outputNodes: string[];
 }
 
+const ANIMA_PREFILL = "masterpiece, best quality, score_9, score_8, safe, @silvana,";
+
+const ANIMA_NEGATIVE =
+  "worst quality, low quality, score_1, score_2, score_3, too many fingers, deformed hand, too many arms, ugly, uncanny valley";
+
 const WORKFLOWS: BotWorkflow[] = [
   {
     id: "anima",
     displayName: "Anima Base (T2I)",
-    description: "Anima base model, 30 steps, 1024x1024 default. Supports negative prompts.",
+    description:
+      "Anima base model, 30 steps, ~1MP. Supports negative prompts and ratio control.",
     graph: animaBaseGraph,
     supportsNegativePrompt: true,
     supportsSize: true,
+    prefillDefault: ANIMA_PREFILL,
+    negativeDefault: ANIMA_NEGATIVE,
     inject: {
       positiveNode: "3",
       positiveKey: "text",
       negativeNode: "4",
       negativeKey: "text",
       seedNodes: [{ node: "8", key: "seed" }],
-      sizeNode: { node: "6", widthKey: "width", heightKey: "height" },
+      latentNode: { node: "6", widthKey: "width", heightKey: "height" },
     },
     outputNodes: ["13"],
   },
   {
     id: "kroma",
     displayName: "Kroma (Krea-2) Upscale",
-    description: "Krea-2 generate + upscale pass, 4+8 steps. No negative prompt (distilled, cfg 1).",
+    description:
+      "Krea-2 generate + upscale pass, 4+8 steps. No negative prompt (distilled, cfg 1). Ratio control supported.",
     graph: kromaUpscaleGraph,
     supportsNegativePrompt: false,
-    supportsSize: false,
+    supportsSize: true,
     inject: {
       positiveNode: "6",
       positiveKey: "text",
       negativeKey: "text",
       seedNodes: [{ node: "30", key: "seed" }],
+      latentNode: { node: "23", widthKey: "width", heightKey: "height" },
     },
     outputNodes: ["19"],
   },
@@ -68,7 +133,12 @@ export function getWorkflow(id: string): BotWorkflow | undefined {
   return WORKFLOWS.find((w) => w.id === id.toLowerCase().trim());
 }
 
-export function listWorkflows(): { id: string; name: string; description: string; supportsNegativePrompt: boolean }[] {
+export function listWorkflows(): {
+  id: string;
+  name: string;
+  description: string;
+  supportsNegativePrompt: boolean;
+}[] {
   return WORKFLOWS.map((w) => ({
     id: w.id,
     name: w.displayName,
@@ -82,14 +152,27 @@ export function generateRandomSeed(): string {
 }
 
 /**
+ * Joins an optional prefill with the user's positive prompt, keeping the
+ * separator clean whether the prefill ends in a comma or not.
+ */
+export function combinePrefill(prefill: string | undefined, positive: string): string {
+  const p = prefill?.trim();
+  if (!p) return positive;
+  if (p.endsWith(",")) return `${p} ${positive}`;
+  return `${p}, ${positive}`;
+}
+
+/**
  * Builds a fresh, ready-to-queue API graph for a workflow:
- * injects positive prompt, negative prompt (if supported), seed and optional size.
+ * injects positive prompt (with optional prefill), negative prompt (if
+ * supported), seed and aspect ratio (literal width/height override).
  */
 export function buildInjectedWorkflow(
   wf: BotWorkflow,
   options: {
     positive: string;
     negative?: string;
+    prefill?: string;
     seed?: string;
     width?: number;
     height?: number;
@@ -97,14 +180,18 @@ export function buildInjectedWorkflow(
 ): ComfyWorkflowGraph {
   const graph: ComfyWorkflowGraph = JSON.parse(JSON.stringify(wf.graph));
 
-  // Positive prompt
-  graph[wf.inject.positiveNode].inputs[wf.inject.positiveKey] = options.positive;
+  // Positive prompt (prefill applies to every workflow that declares one,
+  // i.e. anima; pass a falsy prefill to opt out).
+  graph[wf.inject.positiveNode].inputs[wf.inject.positiveKey] = combinePrefill(
+    wf.prefillDefault ? options.prefill : undefined,
+    options.positive
+  );
 
   // Negative prompt (only if this workflow supports it)
   const negNode = wf.inject.negativeNode;
   if (negNode && wf.supportsNegativePrompt) {
-    graph[negNode].inputs[wf.inject.negativeKey] =
-      options.negative || graph[negNode].inputs[wf.inject.negativeKey] || "";
+    const fallback = options.negative ?? wf.negativeDefault ?? "";
+    graph[negNode].inputs[wf.inject.negativeKey] = fallback;
   }
 
   // Seed
@@ -113,13 +200,13 @@ export function buildInjectedWorkflow(
     graph[s.node].inputs[s.key] = seed;
   }
 
-  // Size
-  if (options.width && options.height && wf.inject.sizeNode) {
-    const { node, widthKey, heightKey } = wf.inject.sizeNode;
+  // Aspect ratio: literal width/height replace any wired input on the latent node
+  if (options.width && options.height) {
+    const { node, widthKey, heightKey } = wf.inject.latentNode;
     const n = graph[node];
     if (n) {
-      n.inputs[widthKey] = Math.round(options.width / 8) * 8;
-      n.inputs[heightKey] = Math.round(options.height / 8) * 8;
+      n.inputs[widthKey] = options.width;
+      n.inputs[heightKey] = options.height;
     }
   }
 
