@@ -15,45 +15,76 @@ export interface Env {
   [key: string]: unknown;
 }
 
-export interface RelayFetchInit extends RequestInit {}
+export interface RelayEndpoint {
+  base: string; // scheme + host + base path, no trailing slash
+  key?: string; // relay auth key (sent as ?key= and auth headers)
+  headers: Record<string, string>;
+}
 
 /**
- * Normalizes the relay URL and builds auth headers from secrets.
+ * Normalizes the relay URL and resolves the auth key from secrets
+ * (or from a ?key= baked into the COMFY_RELAY_URL value).
  */
-export function getRelayEndpoint(env: Env): { base: string; headers: Record<string, string> } | null {
+export function getRelayEndpoint(env: Env): RelayEndpoint | null {
   const raw = env.COMFY_RELAY_URL?.trim();
   if (!raw) return null;
 
-  let base = raw;
+  let url: URL;
   try {
-    const url = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
-    base = `${url.protocol}//${url.host}${url.pathname.replace(/\/+$/, "")}`;
+    url = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
   } catch {
-    // keep raw
+    // unparseable — fall back to string math with no key resolution
+    const key = env.COMFY_RELAY_KEY?.trim();
+    const headers: Record<string, string> = {};
+    if (key) {
+      headers["Authorization"] = `Bearer ${key}`;
+      headers["X-Api-Key"] = key;
+    }
+    return { base: raw, key, headers };
   }
 
-  const key = env.COMFY_RELAY_KEY?.trim();
+  // Key can come from the dedicated secret OR from ?key= in the URL itself
+  const key = env.COMFY_RELAY_KEY?.trim() || url.searchParams.get("key") || undefined;
+  if (key) url.searchParams.delete("key");
+  if (key) url.searchParams.delete("token");
+
+  const base = `${url.protocol}//${url.host}${url.pathname.replace(/\/+$/, "")}`;
+
   const headers: Record<string, string> = {};
   if (key) {
     headers["Authorization"] = `Bearer ${key}`;
     headers["X-Api-Key"] = key;
   }
-  return { base, headers };
+  return { base, key, headers };
 }
 
-export function buildRelayUrl(base: string, path: string): string {
-  return `${base.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
+/**
+ * Builds a full relay URL: base path + route + auth key as ?key= query param
+ * (this is how ComfyUI relays authenticate, matching the studio's browser flow).
+ */
+export function relayUrl(
+  endpoint: RelayEndpoint,
+  path: string,
+  extraParams?: Record<string, string>
+): string {
+  const url = new URL(endpoint.base);
+  url.pathname = `${url.pathname.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
+  for (const [k, v] of Object.entries(extraParams || {})) {
+    url.searchParams.set(k, v);
+  }
+  if (endpoint.key) url.searchParams.set("key", endpoint.key);
+  return url.toString();
 }
 
 /**
  * Submits an injected workflow graph to the ComfyUI relay /prompt endpoint.
  */
 export async function queuePrompt(
-  endpoint: { base: string; headers: Record<string, string> },
+  endpoint: RelayEndpoint,
   workflow: Record<string, any>,
   clientId: string
 ): Promise<string> {
-  const res = await fetch(buildRelayUrl(endpoint.base, "/prompt"), {
+  const res = await fetch(relayUrl(endpoint, "/prompt"), {
     method: "POST",
     headers: { "Content-Type": "application/json", ...endpoint.headers },
     body: JSON.stringify({ prompt: workflow, client_id: clientId }),
@@ -88,7 +119,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * (waiting on a promise doesn't consume CPU time).
  */
 export async function pollForCompletion(
-  endpoint: { base: string; headers: Record<string, string> },
+  endpoint: RelayEndpoint,
   promptId: string,
   wf: BotWorkflow,
   options: { maxWaitMs?: number; intervalMs?: number } = {}
@@ -100,7 +131,7 @@ export async function pollForCompletion(
   while (Date.now() - startTime < maxWaitMs) {
     await sleep(intervalMs);
     try {
-      const res = await fetch(buildRelayUrl(endpoint.base, `/history/${promptId}`), {
+      const res = await fetch(relayUrl(endpoint, `/history/${promptId}`), {
         method: "GET",
         headers: endpoint.headers,
         cache: "no-store",
@@ -142,15 +173,15 @@ export async function pollForCompletion(
  * Downloads generated media from the relay /view endpoint.
  */
 export async function fetchMediaBlob(
-  endpoint: { base: string; headers: Record<string, string> },
+  endpoint: RelayEndpoint,
   media: { filename: string; subfolder: string; type: string }
 ): Promise<Blob> {
-  const params = new URLSearchParams({
+  const params: Record<string, string> = {
     filename: media.filename,
     subfolder: media.subfolder,
     type: media.type,
-  });
-  const res = await fetch(buildRelayUrl(endpoint.base, `/view?${params.toString()}`), {
+  };
+  const res = await fetch(relayUrl(endpoint, "/view", params), {
     method: "GET",
     headers: endpoint.headers,
     cache: "no-store",

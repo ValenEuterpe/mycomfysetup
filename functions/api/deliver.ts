@@ -49,18 +49,25 @@ export const onRequest = async (context: { request: Request; env: Env }): Promis
     ? `${body.prompts.positive.trim().slice(0, 180)}`
     : undefined;
 
-  await deliverMediaToTelegram(
-    env,
-    endpoint,
-    chatId,
-    body.media.map((m) => ({
-      filename: m.filename,
-      subfolder: m.subfolder || "",
-      type: m.type || "output",
-    })),
-    (media) => fetchMediaBlob(endpoint, media),
-    captionBase
-  );
+  try {
+    await deliverMediaToTelegram(
+      env,
+      endpoint,
+      chatId,
+      body.media.map((m) => ({
+        filename: m.filename,
+        subfolder: m.subfolder || "",
+        type: m.type || "output",
+      })),
+      (media) => fetchMediaBlob(endpoint, media),
+      captionBase
+    );
+  } catch (err: any) {
+    return new Response(
+      JSON.stringify({ error: err?.message || "Delivery failed", status: "error" }),
+      { status: 502, headers: { "Content-Type": "application/json" } }
+    );
+  }
   return new Response(JSON.stringify({ ok: true, delivered: body.media.length }), {
     status: 200,
     headers: { "Content-Type": "application/json" },

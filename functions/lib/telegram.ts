@@ -1,4 +1,4 @@
-import { Env } from "./comfy";
+import { Env, RelayEndpoint } from "./comfy";
 
 const TELEGRAM_API = "https://api.telegram.org";
 
@@ -74,7 +74,7 @@ export async function sendTelegramMedia(
  */
 export async function deliverMediaToTelegram(
   env: Env,
-  endpoint: { base: string; headers: Record<string, string> },
+  endpoint: RelayEndpoint,
   chatId: string | number,
   mediaRefs: { filename: string; subfolder: string; type: string }[],
   fetchBlob: (media: { filename: string; subfolder: string; type: string }) => Promise<Blob>,
