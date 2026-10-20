@@ -26,6 +26,9 @@ import {
   clearGenerationHistory,
   loadCustomPresets,
   saveCustomPreset,
+  loadDeliveryPrefs,
+  saveDeliveryPrefs,
+  DeliveryPrefs,
   WorkflowPreset,
   DEFAULT_ENDPOINT,
 } from "./lib/storage";
@@ -38,6 +41,7 @@ import { DynamicForm } from "./components/DynamicForm/DynamicForm";
 import { OutputGallery } from "./components/OutputGallery";
 import { CodeExportModal } from "./components/CodeExportModal";
 import { GraphInspectorModal } from "./components/GraphInspectorModal";
+import { DeliveryToggles } from "./components/DeliveryToggles";
 
 export const App: React.FC = () => {
   // 1. Endpoint & Connection State
@@ -63,6 +67,14 @@ export const App: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
   const [currentMedia, setCurrentMedia] = useState<GeneratedMedia | null>(null);
   const [history, setHistory] = useState<GenerationHistoryItem[]>(loadGenerationHistory());
+
+  // Delivery preferences (browser display / Telegram push)
+  const [deliveryPrefs, setDeliveryPrefs] = useState<DeliveryPrefs>(loadDeliveryPrefs);
+
+  const handleDeliveryPrefsChange = (prefs: DeliveryPrefs) => {
+    setDeliveryPrefs(prefs);
+    saveDeliveryPrefs(prefs);
+  };
 
   // 4. Modals
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
@@ -94,6 +106,28 @@ export const App: React.FC = () => {
     }
 
     initWorkflow();
+  }, []);
+
+  // Pull the ComfyUI relay endpoint from server secrets (if authed & configured).
+  // Falls back to the localStorage endpoint otherwise.
+  useEffect(() => {
+    async function loadRelayConfig() {
+      try {
+        const res = await fetch("/api/config", { cache: "no-store" });
+        if (!res.ok) return; // 401 = password gate not passed yet
+        const cfg = await res.json();
+        if (cfg?.configured && cfg.endpoint) {
+          const withKey = cfg.key ? `${cfg.endpoint}?key=${encodeURIComponent(cfg.key)}` : cfg.endpoint;
+          setEndpoint(withKey);
+          saveEndpoint(withKey);
+          handleTestConnection(withKey);
+        }
+      } catch {
+        // config endpoint unavailable — keep localStorage endpoint
+      }
+    }
+    loadRelayConfig();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Ping endpoint on start
@@ -278,11 +312,46 @@ export const App: React.FC = () => {
         throw new Error("Generation completed but no output images or videos were found.");
       }
 
-      // 4. Update result
-      const firstMedia = mediaOutputs[0];
-      setCurrentMedia(firstMedia);
+      // Delivery step: push to Telegram when enabled
+      if (deliveryPrefs.sendToTelegram) {
+        setStatusText("Sending to Telegram...");
+        const refs = mediaOutputs.map((m) => ({
+          filename: m.filename,
+          subfolder: m.subfolder,
+          type: m.type,
+        }));
+        const prompts = {
+          positive: currentParams.find((p) => p.category === "prompt" && !p.isNegative)?.currentValue,
+          negative: currentParams.find((p) => p.category === "prompt" && p.isNegative)?.currentValue,
+        };
+        const deliverRes = await fetch("/api/deliver", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            target: "telegram",
+            media: refs,
+            prompts,
+          }),
+        });
+        if (!deliverRes.ok) {
+          const j = await deliverRes.json().catch(() => null);
+          throw new Error(j?.error || `Telegram delivery failed (${deliverRes.status}).`);
+        }
+      }
+
+      // Display only when the "load in browser" toggle is on
+      if (deliveryPrefs.loadInBrowser) {
+        const firstMedia = mediaOutputs[0];
+        setCurrentMedia(firstMedia);
+      }
       setProgressPercent(100);
-      setStatusText("Completed!");
+      setStatusText(
+        deliveryPrefs.sendToTelegram
+          ? deliveryPrefs.loadInBrowser
+            ? "Completed & delivered to Telegram!"
+            : "Delivered to Telegram!"
+          : "Completed!"
+      );
 
       // 5. Save to local history
       const durationMs = Date.now() - startTime;
@@ -400,6 +469,9 @@ export const App: React.FC = () => {
                 </>
               )}
             </button>
+
+            {/* Delivery options: browser display / Telegram push */}
+            <DeliveryToggles prefs={deliveryPrefs} onChange={handleDeliveryPrefsChange} />
 
             {/* Dynamic Form Controls */}
             <DynamicForm

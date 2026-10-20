@@ -38,6 +38,22 @@ A lightweight, serverless, universal web studio and dynamic API exporter for **C
 - **Cloudflare Edge Proxy**:
   - Includes a Cloudflare Pages Function at `/api/proxy` to bypass browser CORS restrictions transparently if your ComfyUI relay restricts direct cross-origin browser requests.
 
+- **Password Gate**:
+  - The whole site (pages + API) is protected by a password stored in the `SITE_PASSWORD` secret.
+  - Login is handled by a Cloudflare Pages Function; a signed HttpOnly session cookie (30 days) is issued on success.
+
+- **Secrets-backed Relay Endpoint**:
+  - The ComfyUI relay URL and key live in Cloudflare secrets (`COMFY_RELAY_URL`, `COMFY_RELAY_KEY`) and are delivered to the (already authenticated) browser via `/api/config`.
+
+- **Telegram Bot Generation**:
+  - Generate directly from Telegram via `/gen [model] <positive> [| negative]`.
+  - Ships with two built-in workflows: **anima** (Anima Base T2I, supports negative prompt) and **kroma** (Krea-2 generate + upscale, no negative prompt — it is zeroed out by design at cfg 1).
+  - Finished images are uploaded straight into the chat by the worker.
+
+- **Delivery Toggles**:
+  - The generation page has toggles for **Load in browser** and **Send to Telegram**.
+  - With "Load in browser" off and "Send to Telegram" on, finished images are relayed to Telegram and never displayed in the browser.
+
 ---
 
 ## Quick Start (Local Development)
@@ -62,7 +78,7 @@ Visit `http://localhost:3000` in your browser.
 npm run build
 
 # Deploy to Cloudflare Pages
-npx wrangler pages deploy dist --project-name=comfy-universal-studio
+npx wrangler pages deploy dist --project-name=nsfwimage
 ```
 
 ### Option 2: Cloudflare Dashboard (Git Integration)
@@ -73,3 +89,60 @@ npx wrangler pages deploy dist --project-name=comfy-universal-studio
    - **Build command**: `npm run build`
    - **Build output directory**: `dist`
 4. Deploy!
+
+## Secrets Configuration
+
+| Secret | Purpose |
+| --- | --- |
+| `SITE_PASSWORD` | Password that locks the studio (leave unset to keep the site open) |
+| `AUTH_SECRET` | Optional separate cookie-signing secret (defaults to `SITE_PASSWORD`) |
+| `COMFY_RELAY_URL` | Your ComfyUI server / relay endpoint (injected into the studio automatically) |
+| `COMFY_RELAY_KEY` | Optional auth key sent to the relay (`Bearer` / `X-Api-Key`) |
+| `TELEGRAM_BOT_TOKEN` | Token from @BotFather |
+| `TELEGRAM_WEBHOOK_SECRET` | Optional secret token Telegram echoes in the webhook header |
+| `TELEGRAM_CHAT_ID` | Default chat used by the page's "Send to Telegram" toggle |
+
+Set secrets with the CLI:
+
+```bash
+npx wrangler pages secret put SITE_PASSWORD --project-name=nsfwimage
+npx wrangler pages secret put COMFY_RELAY_URL --project-name=nsfwimage
+npx wrangler pages secret put COMFY_RELAY_KEY --project-name=nsfwimage
+npx wrangler pages secret put TELEGRAM_BOT_TOKEN --project-name=nsfwimage
+```
+
+(Or via Dashboard → your Pages project → Settings → Environment variables. For local dev, put them in `.dev.vars` — it is gitignored.)
+
+## Telegram Bot Setup
+
+1. Create a bot with [@BotFather](https://t.me/BotFather) and copy the token into `TELEGRAM_BOT_TOKEN`.
+2. After deployment, register the webhook once (replace the token and your site URL):
+
+   ```bash
+   curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=https://YOUR-SITE.pages.dev/api/telegram"
+   ```
+
+3. In your chat, use:
+   - `/start` — help
+   - `/models` — list the two built-in workflows
+   - `/gen anima a dog in the street | blurry, low quality`
+   - `/gen kroma a man in a cabriolet car`
+
+   The negative prompt part (`| negative`) only applies to workflows that support it; **kroma** ignores it by design (cfg 1 with zeroed negative conditioning).
+
+### Bot-driven server flow
+
+```
+Telegram /gen  ->  /api/telegram (Pages Function)
+                   builds workflow from functions/lib/workflows.ts registry
+                   -> POST relay /prompt -> poll /history -> GET /view
+                   -> sendPhoto / sendDocument to the chat
+```
+
+### Page-driven delivery
+
+Generation started in the studio keeps running in your browser; with
+**Send to Telegram** enabled the finished media refs are POSTed to the
+auth-protected `/api/deliver` endpoint, which downloads from the relay
+and uploads straight to `TELEGRAM_CHAT_ID` — nothing is shown in the
+browser if **Load in browser** is off.

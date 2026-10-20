@@ -48,6 +48,7 @@ export interface ExtractedParameter {
 }
 
 export interface GeneratedMedia {
+  id?: string; // Local cache id in IndexedDB
   filename: string;
   subfolder: string;
   type: string;

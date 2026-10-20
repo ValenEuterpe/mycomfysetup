@@ -11,9 +11,17 @@ import {
   History,
   Trash2,
   RefreshCw,
+  HardDrive,
+  LayoutTemplate,
+  Columns2,
 } from "lucide-react";
 import { GeneratedMedia, GenerationHistoryItem } from "../types/workflow";
 import { fetchComfyMediaBlob } from "../lib/comfyClient";
+import {
+  getLocalMediaUrl,
+  saveMediaToLocalCache,
+  getLocalCacheStats,
+} from "../lib/mediaCache";
 
 interface OutputGalleryProps {
   currentMedia: GeneratedMedia | null;
@@ -23,6 +31,8 @@ interface OutputGalleryProps {
   statusText: string;
   errorMessage?: string;
   endpoint: string;
+  layoutMode?: "top" | "side";
+  onToggleLayoutMode?: () => void;
   onSelectHistoryItem: (item: GenerationHistoryItem) => void;
   onClearHistory: () => void;
 }
@@ -35,6 +45,8 @@ export const OutputGallery: React.FC<OutputGalleryProps> = ({
   statusText,
   errorMessage,
   endpoint,
+  layoutMode = "top",
+  onToggleLayoutMode,
   onSelectHistoryItem,
   onClearHistory,
 }) => {
@@ -43,8 +55,26 @@ export const OutputGallery: React.FC<OutputGalleryProps> = ({
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
   const [isResolvingBlob, setIsResolvingBlob] = useState(false);
   const [blobError, setBlobError] = useState<string | null>(null);
+  const [cacheStats, setCacheStats] = useState<{ count: number; formattedSize: string }>({
+    count: 0,
+    formattedSize: "0 MB",
+  });
 
-  // When currentMedia changes, resolve blob URL if needed
+  // Load local cache stats
+  const refreshCacheStats = () => {
+    getLocalCacheStats().then((stats) => {
+      setCacheStats({
+        count: stats.count,
+        formattedSize: stats.formattedSize,
+      });
+    });
+  };
+
+  useEffect(() => {
+    refreshCacheStats();
+  }, [history.length, currentMedia]);
+
+  // When currentMedia changes, resolve local blob URL from IndexedDB first
   useEffect(() => {
     if (!currentMedia) {
       setResolvedUrl(null);
@@ -52,37 +82,59 @@ export const OutputGallery: React.FC<OutputGalleryProps> = ({
       return;
     }
 
-    if (currentMedia.url.startsWith("blob:") || currentMedia.url.startsWith("data:")) {
-      setResolvedUrl(currentMedia.url);
-      setBlobError(null);
-      return;
-    }
-
-    // Attempt authenticated blob fetch
     let active = true;
     setIsResolvingBlob(true);
     setBlobError(null);
 
-    fetchComfyMediaBlob(
-      endpoint,
-      currentMedia.filename,
-      currentMedia.subfolder,
-      currentMedia.type
-    )
-      .then(({ localUrl }) => {
-        if (active) {
+    // 1. Check local IndexedDB cache first
+    if (currentMedia.id) {
+      getLocalMediaUrl(currentMedia.id).then((localUrl) => {
+        if (!active) return;
+        if (localUrl) {
           setResolvedUrl(localUrl);
           setIsResolvingBlob(false);
+          return;
         }
-      })
-      .catch((err) => {
-        if (active) {
-          console.warn("Failed to resolve blob URL:", err);
-          // Fall back to original URL
+        // Fallback to fetching remote blob and saving to local cache
+        fetchAndStore();
+      });
+    } else if (currentMedia.url.startsWith("blob:") || currentMedia.url.startsWith("data:")) {
+      setResolvedUrl(currentMedia.url);
+      setIsResolvingBlob(false);
+    } else {
+      fetchAndStore();
+    }
+
+    function fetchAndStore() {
+      if (!currentMedia) return;
+      fetchComfyMediaBlob(
+        endpoint,
+        currentMedia.filename,
+        currentMedia.subfolder,
+        currentMedia.type
+      )
+        .then(async ({ blob, localUrl }) => {
+          if (!active) return;
+          setResolvedUrl(localUrl);
+          setIsResolvingBlob(false);
+          const cacheId =
+            currentMedia.id ||
+            `media_${Date.now()}_${currentMedia.filename.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+          await saveMediaToLocalCache(
+            cacheId,
+            blob,
+            currentMedia.filename,
+            currentMedia.mimeType
+          );
+          refreshCacheStats();
+        })
+        .catch((err) => {
+          if (!active) return;
+          console.warn("Failed to fetch media blob:", err);
           setResolvedUrl(currentMedia.url);
           setIsResolvingBlob(false);
-        }
-      });
+        });
+    }
 
     return () => {
       active = false;
@@ -93,13 +145,18 @@ export const OutputGallery: React.FC<OutputGalleryProps> = ({
     if (!currentMedia || isResolvingBlob) return;
     try {
       setIsResolvingBlob(true);
-      const { localUrl } = await fetchComfyMediaBlob(
+      const { blob, localUrl } = await fetchComfyMediaBlob(
         endpoint,
         currentMedia.filename,
         currentMedia.subfolder,
         currentMedia.type
       );
       setResolvedUrl(localUrl);
+      const cacheId =
+        currentMedia.id ||
+        `media_${Date.now()}_${currentMedia.filename.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+      await saveMediaToLocalCache(cacheId, blob, currentMedia.filename, currentMedia.mimeType);
+      refreshCacheStats();
       setBlobError(null);
     } catch (err: any) {
       setBlobError(err.message || "Could not load image bytes");
@@ -150,10 +207,12 @@ export const OutputGallery: React.FC<OutputGalleryProps> = ({
     <div className="flex flex-col gap-4">
       {/* Main View Area */}
       <div
-        className={`relative bg-zinc-900/90 border border-zinc-800 rounded-2xl overflow-hidden aspect-square flex items-center justify-center shadow-xl transition-all ${
+        className={`relative bg-zinc-900/90 border border-zinc-800 rounded-2xl overflow-hidden flex items-center justify-center shadow-xl transition-all ${
           isFullscreen
             ? "fixed inset-4 z-50 aspect-auto bg-black/95 backdrop-blur-xl"
-            : ""
+            : layoutMode === "top"
+            ? "w-full aspect-[4/3] sm:aspect-[16/10] max-h-[560px]"
+            : "w-full aspect-square"
         }`}
       >
         {/* Generating overlay */}
@@ -200,7 +259,7 @@ export const OutputGallery: React.FC<OutputGalleryProps> = ({
             {isResolvingBlob ? (
               <div className="flex flex-col items-center justify-center gap-2 text-zinc-400">
                 <RefreshCw className="w-6 h-6 animate-spin text-indigo-400" />
-                <span className="text-xs font-mono">Loading image bytes...</span>
+                <span className="text-xs font-mono">Loading from local cache...</span>
               </div>
             ) : currentMedia.mimeType === "video" ? (
               <video
@@ -220,11 +279,26 @@ export const OutputGallery: React.FC<OutputGalleryProps> = ({
             )}
 
             {/* Hover Actions Toolbar */}
-            <div className="absolute top-3 right-3 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-950/80 backdrop-blur-md p-1.5 rounded-xl border border-zinc-800 shadow-lg z-10">
+            <div className="absolute top-3 right-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-950/80 backdrop-blur-md p-1.5 rounded-xl border border-zinc-800 shadow-lg z-10">
+              {onToggleLayoutMode && (
+                <button
+                  type="button"
+                  onClick={onToggleLayoutMode}
+                  title={layoutMode === "top" ? "Switch to Side-by-Side View" : "Switch to Canvas on Top"}
+                  className="p-2 rounded-lg text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors"
+                >
+                  {layoutMode === "top" ? (
+                    <Columns2 className="w-4 h-4 text-indigo-400" />
+                  ) : (
+                    <LayoutTemplate className="w-4 h-4 text-indigo-400" />
+                  )}
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={handleDownload}
-                title="Download media"
+                title="Download from local cache"
                 className="p-2 rounded-lg text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors"
               >
                 <Download className="w-4 h-4" />
@@ -269,35 +343,65 @@ export const OutputGallery: React.FC<OutputGalleryProps> = ({
               Ready to Generate
             </div>
             <p className="text-xs text-zinc-600 max-w-xs">
-              Configure parameters on the left and hit Generate (or press Ctrl+Enter).
+              Configure parameters below and click Generate (or press Ctrl+Enter).
             </p>
           </div>
         ) : null}
       </div>
 
-      {/* History Feed */}
+      {/* History Feed & Local Storage Info */}
       <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-3">
         <div className="flex items-center justify-between mb-2 px-1">
-          <div className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5 uppercase tracking-wider">
-            <History className="w-3.5 h-3.5 text-indigo-400" />
-            History ({history.length})
+          <div className="flex items-center gap-2">
+            <div className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5 uppercase tracking-wider">
+              <History className="w-3.5 h-3.5 text-indigo-400" />
+              History ({history.length})
+            </div>
+            <div className="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <HardDrive className="w-3 h-3" />
+              <span>Local Cache: {cacheStats.formattedSize}</span>
+            </div>
           </div>
-          {history.length > 0 && (
-            <button
-              type="button"
-              onClick={onClearHistory}
-              title="Clear generation history"
-              className="text-[11px] text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-colors"
-            >
-              <Trash2 className="w-3 h-3" />
-              Clear
-            </button>
-          )}
+
+          <div className="flex items-center gap-2">
+            {onToggleLayoutMode && (
+              <button
+                type="button"
+                onClick={onToggleLayoutMode}
+                className="text-[11px] text-zinc-400 hover:text-zinc-200 flex items-center gap-1 px-2 py-1 rounded-md bg-zinc-800/60 hover:bg-zinc-800 border border-zinc-700/40 transition-colors"
+                title={layoutMode === "top" ? "Switch to Side View" : "Switch to Top View"}
+              >
+                {layoutMode === "top" ? (
+                  <>
+                    <Columns2 className="w-3 h-3 text-indigo-400" />
+                    <span className="hidden xs:inline">Side View</span>
+                  </>
+                ) : (
+                  <>
+                    <LayoutTemplate className="w-3 h-3 text-indigo-400" />
+                    <span className="hidden xs:inline">Top View</span>
+                  </>
+                )}
+              </button>
+            )}
+
+            {history.length > 0 && (
+              <button
+                type="button"
+                onClick={onClearHistory}
+                title="Wipe all locally cached images from browser memory"
+                className="text-[11px] text-zinc-400 hover:text-rose-400 flex items-center gap-1 px-2 py-1 rounded-md bg-zinc-800/60 hover:bg-rose-500/10 hover:border-rose-500/30 border border-zinc-700/40 transition-colors"
+              >
+                <Trash2 className="w-3 h-3" />
+                <span>Clear Cache</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {history.length === 0 ? (
           <div className="text-center py-4 text-xs text-zinc-600">
-            No previous renders yet
+            No local cached renders yet
           </div>
         ) : (
           <div className="flex gap-2 overflow-x-auto py-1">
@@ -307,45 +411,82 @@ export const OutputGallery: React.FC<OutputGalleryProps> = ({
                 firstOutput && currentMedia?.filename === firstOutput.filename;
 
               return (
-                <div
+                <HistoryThumbnailItem
                   key={item.id}
+                  output={firstOutput}
+                  isSelected={Boolean(isSelected)}
+                  timestamp={item.timestamp}
+                  status={item.status}
                   onClick={() => onSelectHistoryItem(item)}
-                  className={`group relative shrink-0 w-16 h-16 rounded-lg overflow-hidden border cursor-pointer transition-all ${
-                    isSelected
-                      ? "border-indigo-500 ring-2 ring-indigo-500/30 scale-105"
-                      : "border-zinc-800 hover:border-zinc-700 opacity-80 hover:opacity-100"
-                  }`}
-                >
-                  {firstOutput ? (
-                    firstOutput.mimeType === "video" ? (
-                      <div className="w-full h-full bg-zinc-950 flex items-center justify-center">
-                        <Film className="w-5 h-5 text-indigo-400" />
-                      </div>
-                    ) : (
-                      <img
-                        src={firstOutput.url}
-                        alt="Thumbnail"
-                        className="w-full h-full object-cover"
-                      />
-                    )
-                  ) : (
-                    <div className="w-full h-full bg-zinc-950 flex items-center justify-center text-[10px] text-zinc-500">
-                      {item.status}
-                    </div>
-                  )}
-
-                  {/* Timestamp overlay */}
-                  <div className="absolute inset-x-0 bottom-0 bg-black/60 text-[9px] text-zinc-300 px-1 py-0.5 text-center font-mono opacity-0 group-hover:opacity-100 transition-opacity">
-                    {new Date(item.timestamp).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </div>
-                </div>
+                />
               );
             })}
           </div>
         )}
+      </div>
+    </div>
+  );
+};
+
+/** Individual thumbnail rendered directly from local IndexedDB */
+const HistoryThumbnailItem: React.FC<{
+  output?: GeneratedMedia;
+  isSelected: boolean;
+  timestamp: number;
+  status: string;
+  onClick: () => void;
+}> = ({ output, isSelected, timestamp, status, onClick }) => {
+  const [thumbUrl, setThumbUrl] = useState<string>(output?.url || "");
+
+  useEffect(() => {
+    let active = true;
+    if (output?.id) {
+      getLocalMediaUrl(output.id).then((localUrl) => {
+        if (active && localUrl) {
+          setThumbUrl(localUrl);
+        }
+      });
+    } else if (output?.url) {
+      setThumbUrl(output.url);
+    }
+    return () => {
+      active = false;
+    };
+  }, [output?.id, output?.url]);
+
+  return (
+    <div
+      onClick={onClick}
+      className={`group relative shrink-0 w-16 h-16 rounded-lg overflow-hidden border cursor-pointer transition-all ${
+        isSelected
+          ? "border-indigo-500 ring-2 ring-indigo-500/30 scale-105"
+          : "border-zinc-800 hover:border-zinc-700 opacity-80 hover:opacity-100"
+      }`}
+    >
+      {output ? (
+        output.mimeType === "video" ? (
+          <div className="w-full h-full bg-zinc-950 flex items-center justify-center">
+            <Film className="w-5 h-5 text-indigo-400" />
+          </div>
+        ) : (
+          <img
+            src={thumbUrl}
+            alt="Thumbnail"
+            className="w-full h-full object-cover"
+          />
+        )
+      ) : (
+        <div className="w-full h-full bg-zinc-950 flex items-center justify-center text-[10px] text-zinc-500">
+          {status}
+        </div>
+      )}
+
+      {/* Timestamp overlay */}
+      <div className="absolute inset-x-0 bottom-0 bg-black/70 text-[9px] text-zinc-300 px-1 py-0.5 text-center font-mono opacity-0 group-hover:opacity-100 transition-opacity">
+        {new Date(timestamp).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}
       </div>
     </div>
   );

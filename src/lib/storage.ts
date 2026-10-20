@@ -6,6 +6,7 @@ const STORAGE_KEYS = {
   ACTIVE_PRESET: "comfy_studio_active_preset",
   CUSTOM_PRESETS: "comfy_studio_custom_presets",
   HISTORY: "comfy_studio_history",
+  DELIVERY_PREFS: "comfy_studio_delivery_prefs",
 };
 
 export const DEFAULT_ENDPOINT =
@@ -108,5 +109,30 @@ export function deleteCustomPreset(id: string): void {
     const existing = loadCustomPresets();
     const updated = existing.filter((p) => p.id !== id);
     localStorage.setItem(STORAGE_KEYS.CUSTOM_PRESETS, JSON.stringify(updated));
+  } catch {}
+}
+
+export interface DeliveryPrefs {
+  loadInBrowser: boolean;
+  sendToTelegram: boolean;
+}
+
+export function loadDeliveryPrefs(): DeliveryPrefs {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.DELIVERY_PREFS);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        loadInBrowser: parsed.loadInBrowser !== false,
+        sendToTelegram: parsed.sendToTelegram === true,
+      };
+    }
+  } catch {}
+  return { loadInBrowser: true, sendToTelegram: false };
+}
+
+export function saveDeliveryPrefs(prefs: DeliveryPrefs): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.DELIVERY_PREFS, JSON.stringify(prefs));
   } catch {}
 }

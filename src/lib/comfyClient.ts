@@ -1,4 +1,5 @@
 import { GeneratedMedia } from "../types/workflow";
+import { saveMediaToLocalCache } from "./mediaCache";
 
 export interface ComfyConnectionTestResult {
   ok: boolean;
@@ -333,14 +334,18 @@ export async function pollPromptCompletion(
           if (Array.isArray(output.images)) {
             for (const img of output.images) {
               let displayUrl = buildViewUrl(endpoint, img.filename, img.subfolder, img.type);
+              let mediaId: string | undefined;
               try {
                 const fetched = await fetchComfyMediaBlob(endpoint, img.filename, img.subfolder, img.type);
                 displayUrl = fetched.localUrl;
+                mediaId = `media_${Date.now()}_${img.filename.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+                await saveMediaToLocalCache(mediaId, fetched.blob, img.filename, "image");
               } catch (blobErr) {
-                console.warn("Could not fetch media blob, using direct URL:", blobErr);
+                console.warn("Could not fetch media blob to local cache:", blobErr);
               }
 
               media.push({
+                id: mediaId,
                 filename: img.filename,
                 subfolder: img.subfolder || "",
                 type: img.type || "output",
@@ -354,14 +359,18 @@ export async function pollPromptCompletion(
           if (Array.isArray(videoItems)) {
             for (const vid of videoItems) {
               let displayUrl = buildViewUrl(endpoint, vid.filename, vid.subfolder, vid.type);
+              let mediaId: string | undefined;
               try {
                 const fetched = await fetchComfyMediaBlob(endpoint, vid.filename, vid.subfolder, vid.type);
                 displayUrl = fetched.localUrl;
+                mediaId = `media_${Date.now()}_${vid.filename.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+                await saveMediaToLocalCache(mediaId, fetched.blob, vid.filename, "video");
               } catch (blobErr) {
-                console.warn("Could not fetch media blob, using direct URL:", blobErr);
+                console.warn("Could not fetch media blob to local cache:", blobErr);
               }
 
               media.push({
+                id: mediaId,
                 filename: vid.filename,
                 subfolder: vid.subfolder || "",
                 type: vid.type || "output",
