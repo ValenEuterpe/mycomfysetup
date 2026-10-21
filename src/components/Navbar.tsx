@@ -8,8 +8,12 @@ import {
   Menu,
   X,
   Link2,
+  ImagePlus,
+  Wand2,
 } from "lucide-react";
 import { ComfyConnectionTestResult } from "../lib/comfyClient";
+
+export type StudioPage = "generate" | "edit";
 
 interface NavbarProps {
   connectionStatus: ComfyConnectionTestResult | null;
@@ -18,6 +22,8 @@ interface NavbarProps {
   onOpenExport: () => void;
   onOpenGraph: () => void;
   onResetParams: () => void;
+  activePage: StudioPage;
+  onNavigate: (page: StudioPage) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -27,6 +33,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenExport,
   onOpenGraph,
   onResetParams,
+  activePage,
+  onNavigate,
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -60,6 +68,34 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Right Desktop Actions */}
         <div className="hidden md:flex items-center gap-2 lg:gap-2.5">
+          {/* Page tabs */}
+          <div className="flex items-center gap-0.5 p-1 rounded-xl bg-zinc-900/80 border border-zinc-800">
+            <button
+              type="button"
+              onClick={() => onNavigate("generate")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                activePage === "generate"
+                  ? "bg-indigo-600/90 text-white shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-100"
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              Generate
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate("edit")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                activePage === "edit"
+                  ? "bg-fuchsia-600/90 text-white shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-100"
+              }`}
+            >
+              <Wand2 className="w-3.5 h-3.5" />
+              Identity Edit
+            </button>
+          </div>
+
           {/* Connection status pill (Clickable to open settings) */}
           <button
             type="button"
@@ -141,6 +177,29 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Right Mobile Actions */}
         <div className="flex md:hidden items-center gap-1.5">
+          {/* Page tabs (compact) */}
+          <div className="flex items-center p-0.5 rounded-lg bg-zinc-900 border border-zinc-800">
+            <button
+              type="button"
+              onClick={() => onNavigate("generate")}
+              className={`px-2 py-1 rounded-md text-[10px] font-semibold ${
+                activePage === "generate" ? "bg-indigo-600 text-white" : "text-zinc-400"
+              }`}
+              title="Generate page"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate("edit")}
+              className={`px-2 py-1 rounded-md text-[10px] font-semibold ${
+                activePage === "edit" ? "bg-fuchsia-600 text-white" : "text-zinc-400"
+              }`}
+              title="Identity Edit page"
+            >
+              <Wand2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
           {/* Quick status dot button */}
           <button
             type="button"
@@ -194,6 +253,34 @@ export const Navbar: React.FC<NavbarProps> = ({
       {/* Mobile Collapsible Menu */}
       {isMobileMenuOpen && (
         <div className="md:hidden mt-2 pt-2 border-t border-zinc-800/80 flex flex-col gap-1.5 animate-in slide-in-from-top-2 duration-150">
+          {/* Page navigation */}
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              onClick={() => handleMobileAction(() => onNavigate("generate"))}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium border transition-colors ${
+                activePage === "generate"
+                  ? "bg-indigo-600/20 text-indigo-300 border-indigo-500/40"
+                  : "text-zinc-300 bg-zinc-900/80 border-zinc-800/60"
+              }`}
+            >
+              <Sparkles className="w-4 h-4" />
+              Generate
+            </button>
+            <button
+              type="button"
+              onClick={() => handleMobileAction(() => onNavigate("edit"))}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium border transition-colors ${
+                activePage === "edit"
+                  ? "bg-fuchsia-600/20 text-fuchsia-300 border-fuchsia-500/40"
+                  : "text-zinc-300 bg-zinc-900/80 border-zinc-800/60"
+              }`}
+            >
+              <Wand2 className="w-4 h-4" />
+              Identity Edit
+            </button>
+          </div>
+
           {/* Settings in mobile menu */}
           <button
             type="button"

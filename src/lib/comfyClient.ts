@@ -136,8 +136,9 @@ export function buildWsUrl(endpoint: string, clientId: string): string {
 
 /**
  * Wrapper for fetch with automatic fallback to edge proxy if CORS fails.
+ * (Exported so other libs can talk to ComfyUI with the same CORS fallback.)
  */
-async function comfyFetch(url: string, init?: RequestInit): Promise<Response> {
+export async function comfyProxyFetch(url: string, init?: RequestInit): Promise<Response> {
   try {
     const res = await fetch(url, init);
     return res;
@@ -159,7 +160,7 @@ export async function testComfyConnection(endpoint: string): Promise<ComfyConnec
   try {
     const targetUrl = buildComfyUrl(endpoint, "/prompt");
     const headers = { ...getAuthHeaders(endpoint) };
-    const res = await comfyFetch(targetUrl, { method: "GET", headers, cache: "no-store" });
+    const res = await comfyProxyFetch(targetUrl, { method: "GET", headers, cache: "no-store" });
 
     const latencyMs = Math.round(performance.now() - start);
 
@@ -201,19 +202,25 @@ export async function testComfyConnection(endpoint: string): Promise<ComfyConnec
 
 /**
  * Uploads an image to ComfyUI for image-to-image or image-to-video.
+ * Accepts a File directly, or a Blob + filename (entities, chained outputs).
  */
 export async function uploadImageToComfy(
   endpoint: string,
-  file: File
+  image: File | Blob,
+  filenameHint?: string
 ): Promise<{ name: string; subfolder: string; type: string }> {
   const targetUrl = buildComfyUrl(endpoint, "/upload/image");
   const form = new FormData();
-  form.append("image", file);
+  const name =
+    (image instanceof File && image.name) ||
+    filenameHint ||
+    `edit_ref_${Date.now().toString(36)}.png`;
+  form.append("image", image, name);
   form.append("overwrite", "true");
 
   const headers = { ...getAuthHeaders(endpoint) };
 
-  const res = await comfyFetch(targetUrl, {
+  const res = await comfyProxyFetch(targetUrl, {
     method: "POST",
     headers,
     body: form,
@@ -241,7 +248,7 @@ export async function queuePrompt(
     ...getAuthHeaders(endpoint),
   };
 
-  const res = await comfyFetch(targetUrl, {
+  const res = await comfyProxyFetch(targetUrl, {
     method: "POST",
     headers,
     body: JSON.stringify({ prompt: workflow, client_id: clientId }),
@@ -271,7 +278,7 @@ export async function getHistory(
   const targetUrl = buildComfyUrl(endpoint, `/history/${promptId}`);
   const headers = { ...getAuthHeaders(endpoint) };
 
-  const res = await comfyFetch(targetUrl, { headers, cache: "no-store" });
+  const res = await comfyProxyFetch(targetUrl, { headers, cache: "no-store" });
 
   if (!res.ok) {
     throw new Error(`ComfyUI /history failed (${res.status})`);
@@ -293,7 +300,7 @@ export async function fetchComfyMediaBlob(
   const targetUrl = buildViewUrl(endpoint, filename, subfolder, type);
   const headers = { ...getAuthHeaders(endpoint) };
 
-  const res = await comfyFetch(targetUrl, {
+  const res = await comfyProxyFetch(targetUrl, {
     method: "GET",
     headers,
     cache: "no-store",

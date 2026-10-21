@@ -8,8 +8,10 @@
  */
 
 const DB_NAME = "comfy_universal_media_vault";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = "media_blobs";
+/** v2 store: entity metadata records (blobs live in the shared media_blobs store) */
+export const ENTITY_STORE_NAME = "entities";
 
 export interface CachedMediaEntry {
   id: string; // Unique generation id or filename
@@ -18,6 +20,15 @@ export interface CachedMediaEntry {
   filename: string;
   timestamp: number;
   size: number;
+}
+
+export interface EntityMetaEntry {
+  id: string;
+  name: string;
+  notes?: string;
+  mediaId: string; // key inside media_blobs
+  createdAt: number;
+  updatedAt: number;
 }
 
 /** Check if IndexedDB is available */
@@ -34,10 +45,14 @@ function openMediaDb(): Promise<IDBDatabase> {
 
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
       const db = request.result;
+      const oldVersion = (event as IDBVersionChangeEvent).oldVersion;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, { keyPath: "id" });
+      }
+      if (oldVersion < 2 && !db.objectStoreNames.contains(ENTITY_STORE_NAME)) {
+        db.createObjectStore(ENTITY_STORE_NAME, { keyPath: "id" });
       }
     };
 
@@ -47,8 +62,9 @@ function openMediaDb(): Promise<IDBDatabase> {
   });
 }
 
-/** Helper to run a transaction with store */
-async function withMediaStore<T>(
+/** Helper to run a transaction with a store */
+async function withStore<T>(
+  storeName: string,
   mode: IDBTransactionMode,
   action: (store: IDBObjectStore) => IDBRequest | null
 ): Promise<T | null> {
@@ -64,8 +80,8 @@ async function withMediaStore<T>(
 
   try {
     return await new Promise<T | null>((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, mode);
-      const store = tx.objectStore(STORE_NAME);
+      const tx = db.transaction(storeName, mode);
+      const store = tx.objectStore(storeName);
       const request = action(store);
 
       let resultValue: T | null = null;
@@ -85,6 +101,14 @@ async function withMediaStore<T>(
   } finally {
     db.close();
   }
+}
+
+/** Back-compat wrapper for the shared media blob store */
+async function withMediaStore<T>(
+  mode: IDBTransactionMode,
+  action: (store: IDBObjectStore) => IDBRequest | null
+): Promise<T | null> {
+  return withStore<T>(STORE_NAME, mode, action);
 }
 
 /**
@@ -192,4 +216,38 @@ export async function getLocalCacheStats(): Promise<{ count: number; bytes: numb
     bytes: totalBytes,
     formattedSize: formatted,
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Entity metadata store (v2)                                          */
+/* ------------------------------------------------------------------ */
+
+export async function saveEntityMeta(entity: EntityMetaEntry): Promise<boolean> {
+  const res = await withStore<EntityMetaEntry>(ENTITY_STORE_NAME, "readwrite", (store) =>
+    store.put(entity)
+  );
+  return res !== null;
+}
+
+export async function loadAllEntityMeta(): Promise<EntityMetaEntry[]> {
+  const res = await withStore<EntityMetaEntry[]>(ENTITY_STORE_NAME, "readonly", (store) =>
+    store.getAll()
+  );
+  return res ?? [];
+}
+
+export async function deleteEntityMeta(id: string): Promise<void> {
+  await withStore<EntityMetaEntry>(ENTITY_STORE_NAME, "readwrite", (store) =>
+    store.delete(id)
+  );
+}
+
+/** Fetch the raw image Blob behind a media/entity id */
+export async function getMediaBlob(id: string): Promise<Blob | null> {
+  return getMediaFromLocalCache(id);
+}
+
+/** Get a local object URL for a media blob (returns null when missing) */
+export async function getMediaBlobUrl(id: string): Promise<string | null> {
+  return getLocalMediaUrl(id);
 }

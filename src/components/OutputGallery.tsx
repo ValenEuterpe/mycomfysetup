@@ -14,6 +14,7 @@ import {
   HardDrive,
   LayoutTemplate,
   Columns2,
+  UserRoundPlus,
 } from "lucide-react";
 import { GeneratedMedia, GenerationHistoryItem } from "../types/workflow";
 import { fetchComfyMediaBlob } from "../lib/comfyClient";
@@ -22,6 +23,11 @@ import {
   saveMediaToLocalCache,
   getLocalCacheStats,
 } from "../lib/mediaCache";
+import {
+  createEntity,
+  createEntityFromMediaId,
+} from "../lib/entityStore";
+import { SaveEntityModal } from "./edit/SaveEntityModal";
 
 interface OutputGalleryProps {
   currentMedia: GeneratedMedia | null;
@@ -59,6 +65,7 @@ export const OutputGallery: React.FC<OutputGalleryProps> = ({
     count: 0,
     formattedSize: "0 MB",
   });
+  const [entitySaveOpen, setEntitySaveOpen] = useState(false);
 
   // Load local cache stats
   const refreshCacheStats = () => {
@@ -306,6 +313,15 @@ export const OutputGallery: React.FC<OutputGalleryProps> = ({
 
               <button
                 type="button"
+                onClick={() => setEntitySaveOpen(true)}
+                title="Save as entity (usable as scene or reference in Identity Edit)"
+                className="p-2 rounded-lg text-zinc-300 hover:text-indigo-300 hover:bg-indigo-500/10 transition-colors"
+              >
+                <UserRoundPlus className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
                 onClick={copyUrl}
                 title="Copy media URL"
                 className="p-2 rounded-lg text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors"
@@ -362,7 +378,6 @@ export const OutputGallery: React.FC<OutputGalleryProps> = ({
               <span>Local Cache: {cacheStats.formattedSize}</span>
             </div>
           </div>
-
           <div className="flex items-center gap-2">
             {onToggleLayoutMode && (
               <button
@@ -424,6 +439,15 @@ export const OutputGallery: React.FC<OutputGalleryProps> = ({
           </div>
         )}
       </div>
+
+      {/* Save the current output as a reusable entity */}
+      <SaveEntityModal
+        media={currentMedia}
+        open={entitySaveOpen}
+        onClose={() => setEntitySaveOpen(false)}
+        createEntityFromMediaId={createEntityFromMediaId}
+        createEntityFromBlob={createEntity}
+      />
     </div>
   );
 };

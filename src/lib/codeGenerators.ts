@@ -151,6 +151,58 @@ export function generateJsonSchema(parameters: ExtractedParameter[]): object {
 }
 
 /**
+ * Generates an OpenAI-compatible /v1 usage guide (curl) targeting this
+ * site's public API: GET /v1/models + POST /v1/images/generations.
+ */
+export function generateOpenAiV1Code(origin: string): string {
+  const base = (origin.trim() || "https://your-site.pages.dev").replace(/\/+$/, "");
+
+  return `# OpenAI-compatible Image API
+# Endpoint: POST ${base}/v1/images/generations
+# Compatible with SillyTavern, TavoAI and any OpenAI SDK image client.
+
+## 1) List available models
+curl "${base}/v1/models"
+
+## 2) Generate an image (waits synchronously for completion)
+curl -X POST "${base}/v1/images/generations" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "anima",
+    "prompt": "a cozy classroom, warm sunlight",
+    "size": "1024x1024",
+    "response_format": "url"
+  }'
+
+## Request parameters
+{
+  "model":            "anima" (default) | "kroma",
+  "prompt":           "required — '|' or '||' separates a negative prompt",
+  "negative_prompt":  "optional — defaults to the workflow's own negative",
+  "size":             "1024x1024" | "1792x1024" | "1024x1792" | "16:9"
+                      (snapped to the workflow's nearest supported ratio),
+  "response_format":  "url" (default, link to the finished image)
+                      | "b64_json" (inline image data),
+  "seed":             "optional integer for reproducible results",
+  "n":                "must be 1 (one image per request)",
+  "prefill":          "true (default) applies the workflow quality prefill; false to disable"
+}
+
+## Response (url format)
+{
+  "created": 1710000000,
+  "data": [{ "url": "https://<relay>/view?filename=...&subfolder=&type=output" }]
+}
+
+## Python (OpenAI SDK)
+from openai import OpenAI
+client = OpenAI(base_url="${base}/v1", api_key="not-needed")
+img = client.images.generate(model="anima", prompt="night city skyline", size="1024x1024")
+print(img.data[0].url)
+`;
+}
+
+/**
  * Generates an OpenAPI 3.0 schema specification for this workflow.
  */
 export function generateOpenApiSpec(

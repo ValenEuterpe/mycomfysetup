@@ -18,8 +18,9 @@ export const onRequest = async (context: {
     return next();
   }
 
-  // Public routes: login endpoint + bot webhooks + ratio cheat-sheet asset (fetched by the bot without a session cookie)
-  const publicPaths = ["/api/auth", "/api/telegram", "/api/discord", "/aspectratio.jpg"];
+  // Public routes: login endpoint + bot webhooks + public OpenAI-compatible /v1 API
+  // + ratio cheat-sheet asset (fetched by the bot without a session cookie)
+  const publicPaths = ["/api/auth", "/api/telegram", "/api/discord", "/v1", "/aspectratio.jpg"];
   if (publicPaths.some((p) => url.pathname === p || url.pathname.startsWith(p + "/"))) {
     return next();
   }

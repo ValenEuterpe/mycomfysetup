@@ -8,6 +8,7 @@ import {
   FileCode,
   Braces,
   BookOpen,
+  ImagePlus,
   X,
 } from "lucide-react";
 import { ComfyWorkflowGraph, ExtractedParameter } from "../types/workflow";
@@ -17,6 +18,7 @@ import {
   generatePythonCode,
   generateJsonSchema,
   generateOpenApiSpec,
+  generateOpenAiV1Code,
 } from "../lib/codeGenerators";
 import { injectWorkflowParameters } from "../lib/workflowInjector";
 
@@ -28,7 +30,14 @@ interface CodeExportModalProps {
   parameters: ExtractedParameter[];
 }
 
-type TabType = "curl" | "typescript" | "python" | "schema" | "openapi" | "json";
+type TabType =
+  | "curl"
+  | "typescript"
+  | "python"
+  | "schema"
+  | "openapi"
+  | "openai"
+  | "json";
 
 export const CodeExportModal: React.FC<CodeExportModalProps> = ({
   isOpen,
@@ -70,6 +79,10 @@ export const CodeExportModal: React.FC<CodeExportModalProps> = ({
       );
       fileExtension = "json";
       break;
+    case "openai":
+      codeContent = generateOpenAiV1Code(window.location.origin);
+      fileExtension = "sh";
+      break;
     case "json":
       codeContent = JSON.stringify(
         injectWorkflowParameters(workflowGraph, parameters),
@@ -98,10 +111,10 @@ export const CodeExportModal: React.FC<CodeExportModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
+        <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-zinc-800">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
               <Code2 className="w-4 h-4 text-indigo-400" />
@@ -125,13 +138,14 @@ export const CodeExportModal: React.FC<CodeExportModalProps> = ({
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex items-center gap-1 px-6 pt-3 border-b border-zinc-800 bg-zinc-950/40 overflow-x-auto">
+        <div className="shrink-0 flex items-center gap-1 px-6 pt-3 border-b border-zinc-800 bg-zinc-950/40 overflow-x-auto overflow-y-hidden">
           {[
             { id: "curl", label: "cURL", icon: Terminal },
             { id: "typescript", label: "TypeScript", icon: FileCode },
             { id: "python", label: "Python", icon: FileCode },
             { id: "schema", label: "JSON Schema", icon: Braces },
             { id: "openapi", label: "OpenAPI 3.0", icon: BookOpen },
+            { id: "openai", label: "OpenAI /v1", icon: ImagePlus },
             { id: "json", label: "Injected JSON", icon: Braces },
           ].map((tab) => {
             const Icon = tab.icon;
@@ -154,7 +168,7 @@ export const CodeExportModal: React.FC<CodeExportModalProps> = ({
         </div>
 
         {/* Code Content Area */}
-        <div className="relative flex-1 p-6 overflow-hidden flex flex-col bg-zinc-950">
+        <div className="relative flex-1 min-h-0 p-6 overflow-hidden flex flex-col bg-zinc-950">
           <div className="absolute top-4 right-8 flex items-center gap-2 z-10">
             <button
               onClick={handleCopy}

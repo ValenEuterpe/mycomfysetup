@@ -34,7 +34,7 @@ import {
 } from "./lib/storage";
 
 // Components
-import { Navbar } from "./components/Navbar";
+import { Navbar, StudioPage } from "./components/Navbar";
 import { SettingsModal } from "./components/SettingsModal";
 import { WorkflowBar } from "./components/WorkflowBar";
 import { DynamicForm } from "./components/DynamicForm/DynamicForm";
@@ -42,6 +42,12 @@ import { OutputGallery } from "./components/OutputGallery";
 import { CodeExportModal } from "./components/CodeExportModal";
 import { GraphInspectorModal } from "./components/GraphInspectorModal";
 import { DeliveryToggles } from "./components/DeliveryToggles";
+import { IdentityEditPage } from "./pages/IdentityEditPage";
+
+/** Reads the current hash route ("#/generate" | "#/edit"); unknown -> generate. */
+function readHashPage(): StudioPage {
+  return location.hash.replace(/^#\/?/, "").toLowerCase() === "edit" ? "edit" : "generate";
+}
 
 export const App: React.FC = () => {
   // 1. Endpoint & Connection State
@@ -80,6 +86,20 @@ export const App: React.FC = () => {
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [showGraphModal, setShowGraphModal] = useState<boolean>(false);
+
+  // 5. Hash routing between Generate and Identity Edit pages
+  const [page, setPage] = useState<StudioPage>(readHashPage);
+  const navigate = useCallback((next: StudioPage) => {
+    location.hash = next === "edit" ? "#/edit" : "#/generate";
+    // hashchange listener keeps state in sync; set directly too in case hash is unchanged
+    setPage(next);
+  }, []);
+
+  useEffect(() => {
+    const onHash = () => setPage(readHashPage());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
   // Load initial preset workflow
   useEffect(() => {
@@ -344,6 +364,13 @@ export const App: React.FC = () => {
         const firstMedia = mediaOutputs[0];
         setCurrentMedia(firstMedia);
       }
+      // Hand the output to the Identity Edit studio (scene prefill)
+      try {
+        sessionStorage.setItem(
+          "comfy_studio_last_output",
+          JSON.stringify(mediaOutputs[0])
+        );
+      } catch {}
       setProgressPercent(100);
       setStatusText(
         deliveryPrefs.sendToTelegram
@@ -379,8 +406,9 @@ export const App: React.FC = () => {
     }
   };
 
-  // Keyboard shortcut: Ctrl+Enter / Cmd+Enter to generate
+  // Keyboard shortcut: Ctrl+Enter / Cmd+Enter to generate (Generate page only)
   useEffect(() => {
+    if (page !== "generate") return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
         e.preventDefault();
@@ -390,7 +418,7 @@ export const App: React.FC = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleGenerate]);
+  }, [handleGenerate, page]);
 
   // Restore history item parameters into form
   const handleSelectHistoryItem = (item: GenerationHistoryItem) => {
@@ -427,9 +455,19 @@ export const App: React.FC = () => {
         onOpenExport={() => setShowExportModal(true)}
         onOpenGraph={() => setShowGraphModal(true)}
         onResetParams={handleResetParams}
+        activePage={page}
+        onNavigate={navigate}
       />
 
-      {/* Main Workspace Layout */}
+      {page === "edit" ? (
+        <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col gap-5">
+          <IdentityEditPage
+            endpoint={endpoint}
+            connected={!!connectionStatus?.ok}
+            deliveryPrefs={deliveryPrefs}
+          />
+        </main>
+      ) : (
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col gap-5">
         {/* Workflow Switcher & File Dropzone */}
         <WorkflowBar
@@ -473,6 +511,20 @@ export const App: React.FC = () => {
             {/* Delivery options: browser display / Telegram push */}
             <DeliveryToggles prefs={deliveryPrefs} onChange={handleDeliveryPrefsChange} />
 
+            {/* Continue editing: Identity Edit handoff */}
+            <div className="flex items-center justify-between gap-2 bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2.5">
+              <span className="text-[11px] text-zinc-400">
+                Generated something interesting? Save it as an entity or add characters to it.
+              </span>
+              <button
+                type="button"
+                onClick={() => navigate("edit")}
+                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-fuchsia-300 hover:text-white bg-fuchsia-500/10 border border-fuchsia-500/30 hover:bg-fuchsia-500/20 transition-colors"
+              >
+                Open Identity Edit
+              </button>
+            </div>
+
             {/* Dynamic Form Controls */}
             <DynamicForm
               parameters={parameters}
@@ -500,6 +552,7 @@ export const App: React.FC = () => {
           </div>
         </div>
       </main>
+      )}
 
       {/* Settings Modal */}
       <SettingsModal
