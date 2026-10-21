@@ -36,6 +36,12 @@ import {
   forceReplyMarkup,
   inlineKeyboard,
 } from "../lib/telegram";
+import {
+  ratioGlyph,
+  ratioDiagram,
+  ratioLabel,
+  ratioGallery,
+} from "../lib/ratioVisual";
 
 interface TelegramUser {
   id?: number;
@@ -54,7 +60,14 @@ interface TelegramUpdate {
     id: string;
     data?: string;
     from?: TelegramUser;
-    message?: { chat?: { id?: number }; message_id?: number };
+    message?: {
+      chat?: { id?: number };
+      message_id?: number;
+      text?: string;
+      // Media detection: editMessageText can't edit photo/document messages
+      photo?: unknown[];
+      document?: unknown;
+    };
   };
 }
 
@@ -103,12 +116,15 @@ function panelText(s: ChatSettings): string {
   const negativeLabel = s.negative
     ? `<code>${escapeHtml(clamp(s.negative))}</code>`
     : "<i>off</i>";
+  const ratioLine = ratio
+    ? `${ratioGlyph(ratio)} <b>${escapeHtml(s.ratio)}</b> <i>(${ratio.width}×${ratio.height})</i>\n<code>${ratioDiagram(ratio)}</code>`
+    : escapeHtml(s.ratio);
   return [
     `🎛 <b>Bot Settings</b>`,
     `<i>Your choices apply to every generation until you change them.</i>`,
     ``,
     `🎨 <b>Model</b>: ${escapeHtml(model?.displayName ?? s.modelId)}`,
-    `📐 <b>Ratio</b>: ${escapeHtml(s.ratio)}${ratio ? ` <i>(${ratio.width}×${ratio.height})</i>` : ""}`,
+    `📐 <b>Ratio</b>: ${ratioLine}`,
     `✨ <b>Prefill</b>: ${prefillLabel}`,
     `🚫 <b>Negative</b>: ${negativeLabel}`,
     ``,
@@ -139,21 +155,26 @@ function ratioPickerMarkup(currentId: string): Record<string, any> {
     const a = options[i];
     const b = options[i + 1];
     const row: KbRow = [
-      [
-        `${a.id === currentId ? "✅" : "📐"} ${a.id} · ${a.width}×${a.height}`,
-        `pick:ratio:${a.id}`,
-      ],
+      [ratioLabel(a, a.id === currentId), `pick:ratio:${a.id}`],
     ];
     if (b) {
-      row.push([
-        `${b.id === currentId ? "✅" : "📐"} ${b.id} · ${b.width}×${b.height}`,
-        `pick:ratio:${b.id}`,
-      ]);
+      row.push([ratioLabel(b, b.id === currentId), `pick:ratio:${b.id}`]);
     }
     rows.push(row);
   }
   rows.push(OPEN_SETTINGS_ROW);
   return inlineKeyboard(rows);
+}
+
+function ratioGalleryText(): string {
+  return [
+    `📐 <b>Choose an aspect ratio</b>`,
+    `<i>Saved for future generations. ~1 megapixel base.</i>`,
+    ``,
+    `<code>${ratioGallery(listRatios())}</code>`,
+    ``,
+    `Pick one on the buttons below ↘`,
+  ].join("\n");
 }
 
 async function sendModelPicker(env: Env, chatId: number, token: string): Promise<void> {
@@ -168,12 +189,10 @@ async function sendModelPicker(env: Env, chatId: number, token: string): Promise
 
 async function sendRatioPicker(env: Env, chatId: number, token: string): Promise<void> {
   const s = await getSettings(env, chatId);
-  await sendTelegramMessage(
-    token,
-    chatId,
-    `📐 <b>Choose an aspect ratio</b>\n<i>Saved for future generations. ~1 megapixel base.</i>`,
-    { parseMode: "HTML", replyMarkup: ratioPickerMarkup(s.ratio) }
-  );
+  await sendTelegramMessage(token, chatId, ratioGalleryText(), {
+    parseMode: "HTML",
+    replyMarkup: ratioPickerMarkup(s.ratio),
+  });
 }
 
 async function beginFieldEdit(
@@ -411,13 +430,18 @@ async function handleCallbackQuery(env: Env, cq: NonNullable<TelegramUpdate["cal
 
   switch (true) {
     case data === "panel": {
-      await editTelegramMessage(
-        token,
-        chatId,
-        messageId,
-        panelText(settings),
-        { parseMode: "HTML", replyMarkup: inlineKeyboard(PANEL_ROWS) }
-      );
+      const isMedia =
+        Array.isArray(cq.message?.photo) && cq.message!.photo!.length > 0 ||
+        !!cq.message?.document;
+      if (isMedia) {
+        // Image messages can't be edited to text — open the panel fresh
+        await sendPanel(env, chatId, token);
+      } else {
+        await editTelegramMessage(token, chatId, messageId, panelText(settings), {
+          parseMode: "HTML",
+          replyMarkup: inlineKeyboard(PANEL_ROWS),
+        });
+      }
       break;
     }
 
@@ -449,13 +473,10 @@ async function handleCallbackQuery(env: Env, cq: NonNullable<TelegramUpdate["cal
     }
 
     case data === "pick:ratio": {
-      await editTelegramMessage(
-        token,
-        chatId,
-        messageId,
-        `📐 <b>Choose an aspect ratio</b>\n<i>Saved for future generations. ~1 megapixel base.</i>`,
-        { parseMode: "HTML", replyMarkup: ratioPickerMarkup(settings.ratio) }
-      );
+      await editTelegramMessage(token, chatId, messageId, ratioGalleryText(), {
+        parseMode: "HTML",
+        replyMarkup: ratioPickerMarkup(settings.ratio),
+      });
       break;
     }
 
@@ -465,13 +486,11 @@ async function handleCallbackQuery(env: Env, cq: NonNullable<TelegramUpdate["cal
       if (!ratio) break;
       const persisted = await saveSettings(env, chatId, { ratio: ratio.id });
       if (!persisted) await warnNoKV(token, chatId, env);
-      await editTelegramMessage(
-        token,
-        chatId,
-        messageId,
-        `📐 <b>Ratio set to</b> ${escapeHtml(ratio.id)} <i>(${ratio.width}×${ratio.height})</i>${persisted ? "" : "\n⚠️ <i>(not persisted — KV binding missing)</i>"}`,
-        { parseMode: "HTML", replyMarkup: inlineKeyboard(HOME_ROWS) }
-      );
+      const diagram = `📐 <b>Ratio set to</b> ${escapeHtml(ratio.id)}\n<i>(${ratio.width}×${ratio.height})</i>${persisted ? "" : "\n⚠️ <i>(not persisted — KV binding missing)</i>"}\n\n<code>${ratioDiagram(ratio)}</code>`;
+      await editTelegramMessage(token, chatId, messageId, diagram, {
+        parseMode: "HTML",
+        replyMarkup: inlineKeyboard(HOME_ROWS),
+      });
       break;
     }
 
@@ -619,7 +638,7 @@ async function handleMessage(
       await sendTelegramMessage(
         token,
         chatId,
-        `📐 <b>Ratio set to</b> ${escapeHtml(ratio.id)} <i>(${ratio.width}×${ratio.height})</i>${persisted ? "" : "\n⚠️ <i>(not persisted)</i>"}`,
+        `📐 <b>Ratio set to</b> ${ratioLabel(ratio, true)}${persisted ? "" : "\n⚠️ <i>(not persisted)</i>"}\n\n<code>${ratioDiagram(ratio)}</code>`,
         { parseMode: "HTML" }
       );
       return;

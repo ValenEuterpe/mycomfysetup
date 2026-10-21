@@ -50,6 +50,10 @@ export const DimensionField: React.FC<DimensionFieldProps> = ({
         {ASPECT_RATIOS.map((item) => {
           const isSelected =
             currentWidth === item.width && currentHeight === item.height;
+          // Proportion-true preview box (max ~30px on the long edge)
+          const scale = 30 / Math.max(item.width, item.height);
+          const previewW = Math.max(6, Math.round(item.width * scale));
+          const previewH = Math.max(6, Math.round(item.height * scale));
           return (
             <button
               key={item.ratio}
@@ -61,6 +65,17 @@ export const DimensionField: React.FC<DimensionFieldProps> = ({
                   : "bg-zinc-950/60 text-zinc-300 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800"
               }`}
             >
+              <div className="flex justify-center mb-1.5">
+                <div
+                  aria-hidden
+                  className={`rounded-[3px] border ${
+                    isSelected
+                      ? "bg-white/90 border-white/60"
+                      : "bg-zinc-700 border-zinc-600"
+                  }`}
+                  style={{ width: previewW, height: previewH }}
+                />
+              </div>
               <div className="font-semibold">{item.ratio}</div>
               <div className="text-[10px] text-zinc-400 mt-0.5">
                 {item.width}×{item.height}
