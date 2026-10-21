@@ -41,6 +41,23 @@ import {
   ratioGlyph,
   ratioLabel,
 } from "../lib/ratioVisual";
+import {
+  getEditSession,
+  setSceneIndex,
+  setEditWaitingPrompt,
+  clearEditSession,
+  requestEditPrompt,
+  editHomeText,
+  editHomeMarkup,
+  rolePickerText,
+  rolePickerMarkup,
+  stageTelegramImage,
+  startEditSession,
+  runEditFlow,
+  EDIT_GUIDE_TEXT,
+  EDIT_CAP,
+  EditStagedImage,
+} from "../lib/telegramEdit";
 
 /** Slash-command menu (Telegram "/" dropdown), installed lazily once. */
 const BOT_COMMANDS: { command: string; description: string }[] = [
@@ -51,18 +68,24 @@ const BOT_COMMANDS: { command: string; description: string }[] = [
   { command: "ratio", description: "Aspect ratio gallery" },
   { command: "prefill", description: "Edit the anima prefill" },
   { command: "negative", description: "Edit the anima negative prompt" },
+  { command: "edit", description: "Edit a photo: /edit starts the guided flow" },
   { command: "gen", description: "One-shot generation: /gen [model] <prompt>" },
   { command: "help", description: "Usage help" },
 ];
 
+/** Bump to force a re-install of the slash-command menu (e.g. after adding /edit). */
+const COMMANDS_VERSION = "2";
+
 async function ensureCommandsInstalled(env: Env, token: string): Promise<void> {
   if (!env.TELEGRAM_SETTINGS) return;
   try {
-    const done = await env.TELEGRAM_SETTINGS.get("global:commands_installed");
-    if (done) return;
+    const installedVersion = await env.TELEGRAM_SETTINGS.get("global:commands_version");
+    if (installedVersion === COMMANDS_VERSION) return;
     const ok = await setTelegramCommands(token, BOT_COMMANDS);
     if (ok) {
-      await env.TELEGRAM_SETTINGS.put("global:commands_installed", "1");
+      await env.TELEGRAM_SETTINGS.put("global:commands_version", COMMANDS_VERSION);
+      // Clean up the pre-versioning flag so future migrations stay tidy.
+      await env.TELEGRAM_SETTINGS.delete("global:commands_installed").catch(() => {});
     }
   } catch {
     // non-fatal — the menu is cosmetic
@@ -74,14 +97,40 @@ interface TelegramUser {
   is_bot?: boolean;
 }
 
+interface TelegramPhotoSize {
+  file_id: string;
+  file_unique_id: string;
+  width: number;
+  height: number;
+  file_size?: number;
+}
+
+interface TelegramDocument {
+  file_id: string;
+  file_unique_id: string;
+  file_name?: string;
+  mime_type?: string;
+  file_size?: number;
+}
+
+interface TelegramMessage {
+  chat?: { id?: number };
+  message_id?: number;
+  text?: string;
+  caption?: string;
+  from?: TelegramUser;
+  photo?: TelegramPhotoSize[];
+  document?: TelegramDocument;
+  media_group_id?: string;
+  video?: { file_unique_id?: string };
+  animation?: { file_unique_id?: string };
+  audio?: { file_unique_id?: string };
+  sticker?: { file_unique_id?: string };
+  reply_to_message?: { from?: TelegramUser };
+}
+
 interface TelegramUpdate {
-  message?: {
-    chat?: { id?: number };
-    message_id?: number;
-    text?: string;
-    from?: TelegramUser;
-    reply_to_message?: { from?: TelegramUser };
-  };
+  message?: TelegramMessage;
   callback_query?: {
     id: string;
     data?: string;
@@ -90,7 +139,7 @@ interface TelegramUpdate {
       chat?: { id?: number };
       message_id?: number;
       text?: string;
-      // Media detection: editMessageText can't edit photo/document messages
+      // Legacy field for the callback handlers (photo detection)
       photo?: unknown[];
       document?: unknown;
     };
@@ -450,6 +499,211 @@ async function generateFromText(
   });
 }
 
+/* ------------------------------------------------------------------ */
+/* Identity Edit flow (/edit)                                          */
+/* ------------------------------------------------------------------ */
+
+/** Runs the stage→upload→queue→poll edit chain for a prompt. */
+async function runEditFromPrompt(
+  env: Env,
+  chatId: number,
+  token: string,
+  prompt: string
+): Promise<void> {
+  const endpoint = getRelayEndpoint(env);
+  if (!endpoint) {
+    await sendTelegramMessage(
+      token,
+      chatId,
+      "❌ Server error: <code>COMFY_RELAY_URL</code> is not configured.",
+      { parseMode: "HTML" }
+    );
+    return;
+  }
+
+  const statusId = await sendTelegramMessage(
+    token,
+    chatId,
+    `✂️ <b>Identity edit queued</b> · ${escapeHtml(prompt.slice(0, 80))}`,
+    { parseMode: "HTML" }
+  ).catch(() => undefined);
+
+  await runEditFlow(env, chatId, {
+    endpoint,
+    chatId,
+    prompt,
+    statusMessageId: statusId,
+  });
+}
+
+/** Photo / photo-document intake while an edit session is active. */
+async function handleEditMedia(
+  env: Env,
+  chatId: number,
+  token: string,
+  msg: TelegramMessage
+): Promise<void> {
+  const session = await getEditSession(env, chatId);
+  if (!session) {
+    // No active edit session: nudge instead of silently ignoring the photo.
+    await sendTelegramMessage(
+      token,
+      chatId,
+      `🖼️ Got an image!\nI can <b>edit</b> it or add characters — type <code>/edit</code>, or send any text to generate instead.`,
+      { parseMode: "HTML" }
+    );
+    return;
+  }
+
+  let staged: Omit<EditStagedImage, "role">;
+  if (Array.isArray(msg.photo) && msg.photo.length > 0) {
+    const largest = msg.photo.reduce((a, b) =>
+      (b.width || 0) * (b.height || 0) > (a.width || 0) * (a.height || 0) ? b : a
+    );
+    staged = {
+      fileId: largest.file_id,
+      fileUniqueId: largest.file_unique_id,
+      kind: "photo",
+      width: largest.width,
+      height: largest.height,
+      fileSize: largest.file_size,
+      caption: msg.caption,
+    };
+  } else {
+    const doc = msg.document!;
+    staged = {
+      fileId: doc.file_id,
+      fileUniqueId: doc.file_unique_id,
+      kind: "document",
+      fileSize: doc.file_size,
+      caption: msg.caption,
+    };
+  }
+
+  // Document sanity: only image documents ≤19 MB (bot download cap is 20 MB).
+  if (
+    staged.kind === "document" &&
+    (!staged.fileId ||
+      (msg.document!.mime_type && !/^image\/(jpeg|png|webp)$/i.test(msg.document!.mime_type)))
+  ) {
+    await sendTelegramMessage(
+      token,
+      chatId,
+      "⚠️ Only <b>JPEG / PNG / WebP</b> files work for the edit flow.",
+      { parseMode: "HTML" }
+    );
+    return;
+  }
+  if (staged.kind === "document" && (staged.fileSize ?? 0) > 19 * 1024 * 1024) {
+    await sendTelegramMessage(
+      token,
+      chatId,
+      "⚠️ That file is too big to fetch from Telegram (20 MB cap). Send it as a <b>compressed photo</b> instead.",
+      { parseMode: "HTML" }
+    );
+    return;
+  }
+
+  const result = await stageTelegramImage(env, chatId, staged);
+  if (!result.persisted) await warnNoKV(token, chatId, env);
+
+  const n = result.session.images.length;
+  const index = n - 1;
+  if (result.reason === "duplicate") {
+    await sendTelegramMessage(
+      token,
+      chatId,
+      `🤷 That photo is already staged (${roleSummaryWord(result.session)}). Send another one or tap ✍️.`,
+      { parseMode: "HTML", replyMarkup: editHomeMarkup(result.session.images.length > 0) }
+    );
+    return;
+  }
+  if (result.reason === "full" && !result.added) {
+    await sendTelegramMessage(
+      token,
+      chatId,
+      `⚠️ Session is full (${n}/${EDIT_CAP}) — use <b>🗑 Clear photos</b> to restart.`,
+      { parseMode: "HTML", replyMarkup: editHomeMarkup(true) }
+    );
+    return;
+  }
+
+  const roleAdded = result.session.images[Math.max(0, index)]?.role === "scene" ? "🖼️ Scene" : "🧑 Person";
+  const description = staged.kind === "photo" ? "Photo" : "Image document";
+  await sendTelegramMessage(
+    token,
+    chatId,
+    `<b>${description} ${index + 1} staged as ${roleAdded}.</b>\n${
+      n < EDIT_CAP
+        ? "Send another photo, or tap ✍️ to write the prompt."
+        : "Session full — tap ✍️ to write the prompt."
+    }`,
+    { parseMode: "HTML", replyMarkup: editHomeMarkup(result.session.images.length > 0) }
+  );
+
+  // Captioned photo → the caption IS the prompt
+  // (smooth album+caption UX: photo(s) land, then the caption runs the edit).
+  const caption = msg.caption?.trim();
+  if (result.added && caption && result.session.images.length >= 1) {
+    await runEditFromPrompt(env, chatId, token, caption);
+  }
+}
+
+/** Re-usable role summary word for confirmations. */
+function roleSummaryWord(session: { images: { role: string }[] }): string {
+  const scene = session.images.filter((i) => i.role === "scene").length;
+  const person = session.images.filter((i) => i.role === "person").length;
+  return `${scene} scene · ${person} person${person === 1 ? "" : "s"}`;
+}
+
+/** `/edit` command: start, /edit prompt, /edit cancel|off|exit|help. */
+async function handleEditCommand(
+  env: Env,
+  chatId: number,
+  token: string,
+  text: string
+): Promise<void> {
+  const arg = text
+    .replace(/^\/edit(@\w+)?/i, "")
+    .trim()
+    .toLowerCase();
+
+  // Leave the edit flow ("off"/"exit"/"cancel"/"stop")
+  if (/^(off|exit|cancel|stop)$/.test(arg)) {
+    const had = await getEditSession(env, chatId);
+    if (had) {
+      await clearEditSession(env, chatId);
+      await sendTelegramMessage(
+        token,
+        chatId,
+        `✏️ <b>Exited Identity Edit.</b>\nSend any text to generate normally again.`,
+        { parseMode: "HTML", replyMarkup: inlineKeyboard(HOME_ROWS) }
+      );
+      return;
+    }
+    await sendTelegramMessage(
+      token,
+      chatId,
+      `🤷 No edit session active — send any text to generate.`,
+      { parseMode: "HTML" }
+    );
+    return;
+  }
+
+  // Purge any pending Anima ForceReply so routing stays unambiguous
+  await setAwaiting(env, chatId, null);
+
+  const existing = await getEditSession(env, chatId);
+  if (/^prompt$/.test(arg)) {
+    // Starting the flow implicitly when staging a first prompt request
+    await requestEditPrompt(env, chatId, existing);
+    return;
+  }
+
+  // Start / resume the session (persists a fresh one when none exists)
+  await startEditSession(env, chatId, existing);
+}
+
 function parseGenerationCommand(
   text: string
 ): { modelId?: string; positive: string; negative?: string } {
@@ -604,6 +858,99 @@ async function handleCallbackQuery(
       });
       break;
     }
+
+    /* ── Identity Edit flow controls ─────────────────────────────────── */
+
+    case data === "edit:prompt": {
+      const session = await getEditSession(env, chatId);
+      await requestEditPrompt(env, chatId, session);
+      break;
+    }
+
+    case data === "edit:clear": {
+      const cleared = await clearEditSession(env, chatId);
+      if (!cleared) await warnNoKV(token, chatId, env);
+      // Fresh (persisted) session with a clean status board
+      await startEditSession(env, chatId, null);
+      break;
+    }
+
+    case data === "edit:roles": {
+      const session = await getEditSession(env, chatId);
+      if (!session || session.images.length < 2) {
+        await answerTelegramCallback(
+          token,
+          cq.id,
+          "Stage at least 2 photos first"
+        );
+        break;
+      }
+      await editTelegramMessage(token, chatId, messageId, rolePickerText(session), {
+        parseMode: "HTML",
+        replyMarkup: rolePickerMarkup(session),
+      });
+      break;
+    }
+
+    case data.startsWith("edit:role:"): {
+      const index = parseInt(data.slice("edit:role:".length), 10);
+      const session = await setSceneIndex(env, chatId, Number.isFinite(index) ? index : -1);
+      if (!session) break;
+      await editTelegramMessage(token, chatId, messageId, rolePickerText(session), {
+        parseMode: "HTML",
+        replyMarkup: rolePickerMarkup(session),
+      });
+      break;
+    }
+
+    case data === "edit:refresh": {
+      const session = await getEditSession(env, chatId);
+      if (!session) {
+        await editTelegramMessage(
+          token,
+          chatId,
+          messageId,
+          "⌛ <b>Edit session expired.</b> Type <code>/edit</code> to start again.",
+          { parseMode: "HTML" }
+        );
+        break;
+      }
+      await editTelegramMessage(token, chatId, messageId, editHomeText(session), {
+        parseMode: "HTML",
+        replyMarkup: editHomeMarkup(session.images.length > 0),
+      });
+      break;
+    }
+
+    case data === "edit:guide": {
+      await editTelegramMessage(token, chatId, messageId, EDIT_GUIDE_TEXT, {
+        parseMode: "HTML",
+        replyMarkup: inlineKeyboard([[["⬅️ Back", "edit:refresh"]]]),
+      });
+      break;
+    }
+
+    case data === "edit:exit": {
+      await clearEditSession(env, chatId);
+      await editTelegramMessage(
+        token,
+        chatId,
+        messageId,
+        `✏️ <b>Exited Identity Edit.</b>\nSend any text to generate normally again.`,
+        { parseMode: "HTML", replyMarkup: inlineKeyboard(HOME_ROWS) }
+      );
+      break;
+    }
+
+    case data === "edit:rerun": {
+      const session = await getEditSession(env, chatId);
+      if (!session?.lastPrompt) {
+        await answerTelegramCallback(token, cq.id, "Nothing to rerun yet");
+        break;
+      }
+      await runEditFromPrompt(env, chatId, token, session.lastPrompt);
+      break;
+    }
   }
 }
 
@@ -627,13 +974,14 @@ async function handleMessage(
         ``,
         `Describe an image and get it rendered on the GPU pipeline.`,
         ``,
+        `✂️ <b>/edit</b> — upload 1–3 photos and edit them (change outfits, expressions, add characters — photo ordering is guided)`,
         `🎛 <b>/settings</b> — pick model, ratio, prompts`,
         `✍️ <b>Plain text</b> — generate instantly with saved settings`,
         `🅿️ <b>/gen</b> <code>[model] &lt;prompt&gt; [| negative]</code> — one-shot overrides`,
         `♻️ <b>Regenerate</b> button under every result`,
         `🎨 <b>/models</b> · 📐 <b>/ratio</b> · ✨ <b>/prefill</b> · 🚫 <b>/negative</b>`,
       ].join("\n"),
-      { parseMode: "HTML", replyMarkup: inlineKeyboard([OPEN_SETTINGS_ROW]) }
+      { parseMode: "HTML", replyMarkup: inlineKeyboard(HOME_ROWS) }
     );
     await warnNoKV(token, chatId, env);
     return;
@@ -731,6 +1079,12 @@ async function handleMessage(
     return;
   }
 
+  // /edit — Identity Edit guided flow (also: /edit prompt | /edit off|exit|cancel)
+  if (lower === "/edit" || lower.startsWith("/edit ") || lower.startsWith("/edit@")) {
+    await handleEditCommand(env, chatId, token, text);
+    return;
+  }
+
   // Unknown /command → hint
   if (text.startsWith("/")) {
     await sendTelegramMessage(
@@ -742,9 +1096,9 @@ async function handleMessage(
     return;
   }
 
-  // Pending ForceReply-style input?
+  // Reply to a ForceReply field edit beats the edit-session branch
   const awaiting = await getAwaiting(env, chatId);
-  if (awaiting && (isReplyToBot || awaiting === "prompt")) {
+  if (awaiting && isReplyToBot) {
     await setAwaiting(env, chatId, null);
     if (awaiting === "prompt") {
       await generateFromText(env, chatId, token, text.trim());
@@ -754,11 +1108,31 @@ async function handleMessage(
     return;
   }
 
+  // ── Identity Edit session routing (consumes all non-slash text while active) ──
+  const editSession = await getEditSession(env, chatId);
+  if (editSession) {
+    await setEditWaitingPrompt(env, chatId, false);
+    await runEditFromPrompt(env, chatId, token, text.trim());
+    return;
+  }
+
+  // Prompt requested without an explicit ForceReply context
+  if (awaiting === "prompt") {
+    await setAwaiting(env, chatId, null);
+    await generateFromText(env, chatId, token, text.trim());
+    return;
+  }
+
   // Plain text = instant generation with saved settings
   await generateFromText(env, chatId, token, text.trim());
 }
 
-export const onRequest = async (context: { request: Request; env: Env }): Promise<Response> => {
+export const onRequest = async (context: {
+  request: Request;
+  env: Env;
+  /** Cloudflare Pages Functions context: continue work after responding */
+  waitUntil?: (promise: Promise<unknown>) => void;
+}): Promise<Response> => {
   const { request, env } = context;
 
   if (env.TELEGRAM_WEBHOOK_SECRET?.trim()) {
@@ -792,29 +1166,71 @@ export const onRequest = async (context: { request: Request; env: Env }): Promis
 
   const origin = new URL(request.url).origin;
 
-  try {
-    if (update.callback_query) {
-      await handleCallbackQuery(env, update.callback_query, origin);
-    } else if (update.message?.chat?.id && update.message.text) {
+  /**
+   * Acknowledge Telegram immediately (200) and keep processing in the
+   * background — prevents the webhook retry storm / duplicate queues that
+   * long-running generations otherwise cause.
+   */
+  const dispatch = (async () => {
+    try {
+      if (update.callback_query) {
+        await handleCallbackQuery(env, update.callback_query, origin);
+        return;
+      }
+
       const msg = update.message;
-      await handleMessage(
-        env,
-        msg.chat!.id!,
-        msg.text!,
-        msg.reply_to_message?.from?.is_bot === true,
-        origin
-      );
+      if (!msg?.chat?.id) return;
+      const chatId = msg.chat.id;
+      const token = env.TELEGRAM_BOT_TOKEN!;
+
+      // Text messages: normal command/flow routing
+      if (msg.text) {
+        await handleMessage(
+          env,
+          chatId,
+          msg.text,
+          msg.reply_to_message?.from?.is_bot === true,
+          origin
+        );
+        return;
+      }
+
+      // Photos / image documents: Identity Edit staging (+ caption-as-prompt)
+      const hasPhoto = Array.isArray(msg.photo) && msg.photo.length > 0;
+      const hasImageDoc =
+        !!msg.document && (!msg.document.mime_type || /^image\//.test(msg.document.mime_type));
+      if (hasPhoto || hasImageDoc) {
+        await handleEditMedia(env, chatId, token, msg);
+        return;
+      }
+
+      // Any non-image media (videos, audio, stickers…) with no text: gentle hint
+      if (msg.document || msg.video || msg.animation || msg.audio || msg.sticker) {
+        await sendTelegramMessage(
+          token,
+          chatId,
+          `🤔 I can only read text and images. Use ✂️ <code>/edit</code> for photo editing or send text to generate.`,
+          { parseMode: "HTML" }
+        );
+      }
+    } catch (err: any) {
+      const chatId = update.callback_query?.message?.chat?.id ?? update.message?.chat?.id;
+      if (chatId && env.TELEGRAM_BOT_TOKEN) {
+        await sendTelegramMessage(
+          env.TELEGRAM_BOT_TOKEN,
+          chatId,
+          `❌ <b>Unexpected error</b>\n<code>${escapeHtml(clamp(err?.message || "Unknown error", 300))}</code>`,
+          { parseMode: "HTML" }
+        ).catch(() => {});
+      }
     }
-  } catch (err: any) {
-    const chatId = update.callback_query?.message?.chat?.id ?? update.message?.chat?.id;
-    if (chatId && env.TELEGRAM_BOT_TOKEN) {
-      await sendTelegramMessage(
-        env.TELEGRAM_BOT_TOKEN,
-        chatId,
-        `❌ <b>Unexpected error</b>\n<code>${escapeHtml(clamp(err?.message || "Unknown error", 300))}</code>`,
-        { parseMode: "HTML" }
-      ).catch(() => {});
-    }
+  })();
+
+  if (typeof context.waitUntil === "function") {
+    context.waitUntil(dispatch);
+  } else {
+    // Local dev fallback: no waitUntil available — keep the blocking behaviour
+    await dispatch;
   }
 
   // Always 200 so Telegram doesn't retry forever
