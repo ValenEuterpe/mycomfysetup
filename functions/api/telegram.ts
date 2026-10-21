@@ -35,13 +35,39 @@ import {
   escapeHtml,
   forceReplyMarkup,
   inlineKeyboard,
+  setTelegramCommands,
 } from "../lib/telegram";
 import {
   ratioGlyph,
-  ratioDiagram,
   ratioLabel,
-  ratioGallery,
 } from "../lib/ratioVisual";
+
+/** Slash-command menu (Telegram "/" dropdown), installed lazily once. */
+const BOT_COMMANDS: { command: string; description: string }[] = [
+  { command: "start", description: "Start & overview" },
+  { command: "settings", description: "Model, ratio & prompt settings" },
+  { command: "models", description: "Model picker" },
+  { command: "model", description: "Set model directly: /model anima" },
+  { command: "ratio", description: "Aspect ratio gallery" },
+  { command: "prefill", description: "Edit the anima prefill" },
+  { command: "negative", description: "Edit the anima negative prompt" },
+  { command: "gen", description: "One-shot generation: /gen [model] <prompt>" },
+  { command: "help", description: "Usage help" },
+];
+
+async function ensureCommandsInstalled(env: Env, token: string): Promise<void> {
+  if (!env.TELEGRAM_SETTINGS) return;
+  try {
+    const done = await env.TELEGRAM_SETTINGS.get("global:commands_installed");
+    if (done) return;
+    const ok = await setTelegramCommands(token, BOT_COMMANDS);
+    if (ok) {
+      await env.TELEGRAM_SETTINGS.put("global:commands_installed", "1");
+    }
+  } catch {
+    // non-fatal — the menu is cosmetic
+  }
+}
 
 interface TelegramUser {
   id?: number;
@@ -117,7 +143,7 @@ function panelText(s: ChatSettings): string {
     ? `<code>${escapeHtml(clamp(s.negative))}</code>`
     : "<i>off</i>";
   const ratioLine = ratio
-    ? `${ratioGlyph(ratio)} <b>${escapeHtml(s.ratio)}</b> <i>(${ratio.width}×${ratio.height})</i>\n<code>${ratioDiagram(ratio)}</code>`
+    ? `${ratioGlyph(ratio)} <b>${escapeHtml(s.ratio)}</b> <i>(${ratio.width}×${ratio.height})</i>`
     : escapeHtml(s.ratio);
   return [
     `🎛 <b>Bot Settings</b>`,
@@ -166,15 +192,46 @@ function ratioPickerMarkup(currentId: string): Record<string, any> {
   return inlineKeyboard(rows);
 }
 
-function ratioGalleryText(): string {
+function ratioPickerCaption(s: ChatSettings): string {
+  const ratio = resolveRatio(s.ratio);
   return [
-    `📐 <b>Choose an aspect ratio</b>`,
-    `<i>Saved for future generations. ~1 megapixel base.</i>`,
+    `📐 <b>Aspect ratio</b>${ratio ? ` — current: ${ratioLabel(ratio, true)}` : ""}`,
     ``,
-    `<code>${ratioGallery(listRatios())}</code>`,
-    ``,
-    `Pick one on the buttons below ↘`,
+    `Pick one below — saved until you change it.`,
   ].join("\n");
+}
+
+/**
+ * Sends the ratio picker: the visual reference image (public/aspectratio.jpg)
+ * with the selection buttons attached. Falls back to a text message if the
+ * static asset can't be fetched.
+ */
+async function sendRatioPicker(
+  env: Env,
+  chatId: number,
+  token: string,
+  origin: string
+): Promise<void> {
+  const s = await getSettings(env, chatId);
+  const markup = ratioPickerMarkup(s.ratio);
+  const caption = ratioPickerCaption(s);
+  try {
+    const res = await fetch(`${origin}/aspectratio.jpg`);
+    if (!res.ok) throw new Error(`aspectratio.jpg fetch failed (${res.status})`);
+    const blob = await res.blob();
+    await sendTelegramMedia(token, chatId, blob, "aspectratio.jpg", caption, {
+      parseMode: "HTML",
+      replyMarkup: markup,
+    });
+    return;
+  } catch {
+    await sendTelegramMessage(
+      token,
+      chatId,
+      `${ratioPickerCaption(s)}\n<i>(reference image unavailable)</i>`,
+      { parseMode: "HTML", replyMarkup: markup }
+    );
+  }
 }
 
 async function sendModelPicker(env: Env, chatId: number, token: string): Promise<void> {
@@ -185,14 +242,6 @@ async function sendModelPicker(env: Env, chatId: number, token: string): Promise
     `🎨 <b>Choose a model</b>\n<i>Saved for future generations.</i>`,
     { parseMode: "HTML", replyMarkup: modelPickerMarkup(s.modelId) }
   );
-}
-
-async function sendRatioPicker(env: Env, chatId: number, token: string): Promise<void> {
-  const s = await getSettings(env, chatId);
-  await sendTelegramMessage(token, chatId, ratioGalleryText(), {
-    parseMode: "HTML",
-    replyMarkup: ratioPickerMarkup(s.ratio),
-  });
 }
 
 async function beginFieldEdit(
@@ -418,7 +467,11 @@ function parseGenerationCommand(
   return { modelId, positive, negative };
 }
 
-async function handleCallbackQuery(env: Env, cq: NonNullable<TelegramUpdate["callback_query"]>): Promise<void> {
+async function handleCallbackQuery(
+  env: Env,
+  cq: NonNullable<TelegramUpdate["callback_query"]>,
+  origin: string
+): Promise<void> {
   const token = env.TELEGRAM_BOT_TOKEN!;
   const chatId = cq.message?.chat?.id;
   const messageId = cq.message?.message_id;
@@ -473,10 +526,12 @@ async function handleCallbackQuery(env: Env, cq: NonNullable<TelegramUpdate["cal
     }
 
     case data === "pick:ratio": {
-      await editTelegramMessage(token, chatId, messageId, ratioGalleryText(), {
-        parseMode: "HTML",
-        replyMarkup: ratioPickerMarkup(settings.ratio),
-      });
+      // Photo pickers can't be text-edited — send a fresh picker and
+      // remove the old one when it was a photo.
+      if (Array.isArray(cq.message?.photo) && cq.message!.photo!.length > 0) {
+        await deleteTelegramMessage(token, chatId, messageId);
+      }
+      await sendRatioPicker(env, chatId, token, origin);
       break;
     }
 
@@ -486,11 +541,13 @@ async function handleCallbackQuery(env: Env, cq: NonNullable<TelegramUpdate["cal
       if (!ratio) break;
       const persisted = await saveSettings(env, chatId, { ratio: ratio.id });
       if (!persisted) await warnNoKV(token, chatId, env);
-      const diagram = `📐 <b>Ratio set to</b> ${escapeHtml(ratio.id)}\n<i>(${ratio.width}×${ratio.height})</i>${persisted ? "" : "\n⚠️ <i>(not persisted — KV binding missing)</i>"}\n\n<code>${ratioDiagram(ratio)}</code>`;
-      await editTelegramMessage(token, chatId, messageId, diagram, {
-        parseMode: "HTML",
-        replyMarkup: inlineKeyboard(HOME_ROWS),
-      });
+      await deleteTelegramMessage(token, chatId, messageId);
+      await sendTelegramMessage(
+        token,
+        chatId,
+        `📐 <b>Ratio set to</b> ${ratioLabel(ratio, true)}${persisted ? "" : "\n⚠️ <i>(not persisted — KV binding missing)</i>"}`,
+        { parseMode: "HTML", replyMarkup: inlineKeyboard(HOME_ROWS) }
+      );
       break;
     }
 
@@ -554,7 +611,8 @@ async function handleMessage(
   env: Env,
   chatId: number,
   text: string,
-  isReplyToBot: boolean
+  isReplyToBot: boolean,
+  origin: string
 ): Promise<void> {
   const token = env.TELEGRAM_BOT_TOKEN!;
   const lower = text.toLowerCase();
@@ -619,7 +677,7 @@ async function handleMessage(
     return;
   }
 
-  // /ratio [16:9]
+  // /ratio [16:9] — no arg opens the image picker
   if (lower.startsWith("/ratio")) {
     const arg = text.slice("/ratio".length).trim();
     if (arg) {
@@ -638,12 +696,12 @@ async function handleMessage(
       await sendTelegramMessage(
         token,
         chatId,
-        `📐 <b>Ratio set to</b> ${ratioLabel(ratio, true)}${persisted ? "" : "\n⚠️ <i>(not persisted)</i>"}\n\n<code>${ratioDiagram(ratio)}</code>`,
+        `📐 <b>Ratio set to</b> ${ratioLabel(ratio, true)}${persisted ? "" : "\n⚠️ <i>(not persisted)</i>"}`,
         { parseMode: "HTML" }
       );
       return;
     }
-    await sendRatioPicker(env, chatId, token);
+    await sendRatioPicker(env, chatId, token, origin);
     return;
   }
 
@@ -730,16 +788,21 @@ export const onRequest = async (context: { request: Request; env: Env }): Promis
     });
   }
 
+  await ensureCommandsInstalled(env, env.TELEGRAM_BOT_TOKEN);
+
+  const origin = new URL(request.url).origin;
+
   try {
     if (update.callback_query) {
-      await handleCallbackQuery(env, update.callback_query);
+      await handleCallbackQuery(env, update.callback_query, origin);
     } else if (update.message?.chat?.id && update.message.text) {
       const msg = update.message;
       await handleMessage(
         env,
         msg.chat!.id!,
         msg.text!,
-        msg.reply_to_message?.from?.is_bot === true
+        msg.reply_to_message?.from?.is_bot === true,
+        origin
       );
     }
   } catch (err: any) {

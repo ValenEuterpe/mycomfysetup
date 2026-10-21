@@ -128,10 +128,15 @@ export function parseWorkflowParameters(graph: ComfyWorkflowGraph): ExtractedPar
         classType.toLowerCase().includes("resolution")
       ) {
         category = "dimension";
-        type = "number";
-        min = inputKey === "batch_size" ? 1 : 64;
-        max = inputKey === "batch_size" ? 8 : 4096;
-        step = inputKey === "batch_size" ? 1 : 16;
+        // Keep enum-ish strings (e.g. ResolutionSelector aspect_ratio) textual
+        type = typeof rawValue === "string" ? "text" : "number";
+        if (type === "number") {
+          min = inputKey === "batch_size" ? 1 : 64;
+          max = inputKey === "batch_size" ? 8 : 4096;
+          step = inputKey === "batch_size" ? 1 : 16;
+        } else if (inputKey === "aspect_ratio") {
+          label = "Aspect Ratio";
+        }
       } else if (
         inputKey === "seed" ||
         inputKey === "noise_seed" ||

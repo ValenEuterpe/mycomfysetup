@@ -125,18 +125,20 @@ npx wrangler pages secret put TELEGRAM_BOT_TOKEN --project-name=nsfwimage
    # then put the returned id into wrangler.toml under [[kv_namespaces]]
    ```
 
-3. After deployment, register the webhook once (replace the token and your site URL):
+3. Register the webhook **and the slash-command menu** (the "/" dropdown in Telegram) in one step with the setup script:
 
    ```bash
-   curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=https://YOUR-SITE.pages.dev/api/telegram"
+   node scripts/telegram-setup.mjs --webhook=https://YOUR-SITE.pages.dev/api/telegram
    ```
+
+   It reads the token from `TELEGRAM_BOT_TOKEN` (env or `.dev.vars`), registers the commands (`start, settings, models, model, ratio, prefill, negative, gen, help`) and sets the webhook. The bot also self-installs the command menu lazily on first use.
 
 4. In your chat:
    - `/start` — welcome + quick access to settings
    - any plain text — generate instantly using your saved settings
    - `/settings` — settings panel (model, ratio, prefill, negative)
    - `/models` or `/model anima` — pick / set the model (persisted)
-   - `/ratio 16:9` or `/ratio` — set the aspect ratio via picker (persisted)
+   - `/ratio 16:9` or `/ratio` — the aspect-ratio reference image (`public/aspectratio.jpg`) with tap-to-select buttons (persisted)
    - `/prefill` — edit the anima prefill (ForceReply dialog; `reset` / `(clear)` supported)
    - `/negative` — edit the anima negative prompt (same flow)
    - `/gen kroma a man in a cabriolet car` — one-shot generation with one-shot overrides

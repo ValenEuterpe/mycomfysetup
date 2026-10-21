@@ -1,6 +1,19 @@
 import { animaBaseGraph } from "../workflows/animaBase";
 import { kromaUpscaleGraph } from "../workflows/kromaUpscale";
 import { ComfyWorkflowGraph } from "../../src/types/workflow";
+import { RATIO_PRESETS, RatioPreset, findRatio } from "../../src/lib/ratios";
+
+// Canonical ratio list is shared with the web studio (src/lib/ratios.ts)
+export { RATIO_PRESETS as RATIO_OPTIONS };
+export type { RatioPreset as RatioOption };
+
+export function listRatios(): RatioPreset[] {
+  return RATIO_PRESETS;
+}
+
+export function resolveRatio(id: string): RatioPreset | undefined {
+  return findRatio(id);
+}
 
 export interface WorkflowInjectSpec {
   /** Node ids receiving the positive prompt text */
@@ -17,53 +30,6 @@ export interface WorkflowInjectSpec {
    * any wired input (e.g. kroma's ResolutionSelector links).
    */
   latentNode: { node: string; widthKey: string; heightKey: string };
-}
-
-export interface RatioOption {
-  id: string;
-  label: string;
-  width: number;
-  height: number;
-}
-
-/**
- * Aspect ratios offered by the bot, computed at roughly a 1-megapixel base
- * with dimensions rounded to multiples of 8 (ComfyUI latent requirement).
- */
-const RATIO_IDS = [
-  "1:1",
-  "3:2",
-  "2:3",
-  "4:3",
-  "3:4",
-  "16:9",
-  "9:16",
-  "16:10",
-  "10:16",
-  "21:9",
-  "9:21",
-];
-
-const round8 = (v: number) => Math.max(64, Math.round(v / 8) * 8);
-
-function dimsForRatio(rw: number, rh: number): { width: number; height: number } {
-  const area = 1024 * 1024;
-  const width = round8(Math.sqrt(area * (rw / rh)));
-  const height = round8(area / width);
-  return { width, height };
-}
-
-export const RATIO_OPTIONS: RatioOption[] = RATIO_IDS.map((id) => {
-  const [rw, rh] = id.split(":").map(Number);
-  return { id, label: id, ...dimsForRatio(rw, rh) };
-});
-
-export function listRatios(): RatioOption[] {
-  return RATIO_OPTIONS;
-}
-
-export function resolveRatio(id: string): RatioOption | undefined {
-  return RATIO_OPTIONS.find((r) => r.id === id.toLowerCase().trim());
 }
 
 export interface BotWorkflow {

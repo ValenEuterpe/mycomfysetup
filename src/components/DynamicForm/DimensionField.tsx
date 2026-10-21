@@ -1,27 +1,43 @@
 import React from "react";
 import { Maximize2, ArrowRightLeft } from "lucide-react";
 import { ExtractedParameter } from "../../types/workflow";
-import { ASPECT_RATIOS } from "../../lib/workflowParser";
+import { RatioSupport } from "../../lib/ratioSupport";
 
 interface DimensionFieldProps {
   parameters: ExtractedParameter[];
   onParameterChange: (paramId: string, value: any) => void;
+  ratioSupport: RatioSupport;
 }
 
 export const DimensionField: React.FC<DimensionFieldProps> = ({
   parameters,
   onParameterChange,
+  ratioSupport,
 }) => {
   const widthParam = parameters.find((p) => p.inputKey === "width");
   const heightParam = parameters.find((p) => p.inputKey === "height");
   const batchParam = parameters.find((p) => p.inputKey === "batch_size");
+  const aspectParam = parameters.find((p) => p.inputKey === "aspect_ratio");
 
   const currentWidth = Number(widthParam?.currentValue || 1024);
   const currentHeight = Number(heightParam?.currentValue || 1024);
 
-  const handleRatioClick = (w: number, h: number) => {
-    if (widthParam) onParameterChange(widthParam.id, w);
-    if (heightParam) onParameterChange(heightParam.id, h);
+  const handlePresetClick = (preset: RatioSupport["presets"][number]) => {
+    if (preset.mode === "enum") {
+      if (aspectParam && preset.enumValue) {
+        onParameterChange(aspectParam.id, preset.enumValue);
+      }
+      return;
+    }
+    if (widthParam) onParameterChange(widthParam.id, preset.width);
+    if (heightParam) onParameterChange(heightParam.id, preset.height);
+  };
+
+  const isSelected = (preset: RatioSupport["presets"][number]) => {
+    if (preset.mode === "enum") {
+      return Boolean(aspectParam && preset.enumValue && aspectParam.currentValue === preset.enumValue);
+    }
+    return currentWidth === preset.width && currentHeight === preset.height;
   };
 
   const handleSwap = () => {
@@ -41,49 +57,52 @@ export const DimensionField: React.FC<DimensionFieldProps> = ({
           Resolution & Aspect Ratio
         </label>
         <div className="text-xs font-mono text-zinc-400">
-          {currentWidth} × {currentHeight}
+          {widthParam && heightParam
+            ? `${currentWidth} × ${currentHeight}`
+            : aspectParam?.currentValue || ""}
         </div>
       </div>
 
-      {/* Quick Ratio Presets */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 mb-3">
-        {ASPECT_RATIOS.map((item) => {
-          const isSelected =
-            currentWidth === item.width && currentHeight === item.height;
-          // Proportion-true preview box (max ~30px on the long edge)
-          const scale = 30 / Math.max(item.width, item.height);
-          const previewW = Math.max(6, Math.round(item.width * scale));
-          const previewH = Math.max(6, Math.round(item.height * scale));
-          return (
-            <button
-              key={item.ratio}
-              type="button"
-              onClick={() => handleRatioClick(item.width, item.height)}
-              className={`px-2 py-2 rounded-lg text-center border text-xs font-medium transition-all ${
-                isSelected
-                  ? "bg-indigo-600 text-white border-indigo-500 shadow-sm shadow-indigo-600/30"
-                  : "bg-zinc-950/60 text-zinc-300 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800"
-              }`}
-            >
-              <div className="flex justify-center mb-1.5">
-                <div
-                  aria-hidden
-                  className={`rounded-[3px] border ${
-                    isSelected
-                      ? "bg-white/90 border-white/60"
-                      : "bg-zinc-700 border-zinc-600"
-                  }`}
-                  style={{ width: previewW, height: previewH }}
-                />
-              </div>
-              <div className="font-semibold">{item.ratio}</div>
-              <div className="text-[10px] text-zinc-400 mt-0.5">
-                {item.width}×{item.height}
-              </div>
-            </button>
-          );
-        })}
-      </div>
+      {/* Quick Ratio Presets (per-workflow, derived from the graph) */}
+      {ratioSupport.presets.length > 0 && (
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 mb-3">
+          {ratioSupport.presets.map((preset) => {
+            const selected = isSelected(preset);
+            // Proportion-true preview box (max ~30px on the long edge)
+            const scale = 30 / Math.max(preset.width, preset.height);
+            const previewW = Math.max(6, Math.round(preset.width * scale));
+            const previewH = Math.max(6, Math.round(preset.height * scale));
+            return (
+              <button
+                key={`${preset.id}-${preset.enumValue || preset.width}`}
+                type="button"
+                onClick={() => handlePresetClick(preset)}
+                className={`px-2 py-2 rounded-lg text-center border text-xs font-medium transition-all ${
+                  selected
+                    ? "bg-indigo-600 text-white border-indigo-500 shadow-sm shadow-indigo-600/30"
+                    : "bg-zinc-950/60 text-zinc-300 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800"
+                }`}
+              >
+                <div className="flex justify-center mb-1.5">
+                  <div
+                    aria-hidden
+                    className={`rounded-[3px] border ${
+                      selected
+                        ? "bg-white/90 border-white/60"
+                        : "bg-zinc-700 border-zinc-600"
+                    }`}
+                    style={{ width: previewW, height: previewH }}
+                  />
+                </div>
+                <div className="font-semibold">{preset.id}</div>
+                <div className="text-[10px] text-zinc-400 mt-0.5">
+                  {preset.width}×{preset.height}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Manual Dimensions Input */}
       <div className="flex items-center gap-2">

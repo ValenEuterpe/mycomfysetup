@@ -476,6 +476,7 @@ export const App: React.FC = () => {
             {/* Dynamic Form Controls */}
             <DynamicForm
               parameters={parameters}
+              workflowGraph={workflowGraph}
               onParameterChange={handleParameterChange}
               randomizeSeedOnGenerate={randomizeSeedOnGenerate}
               onToggleRandomizeSeed={setRandomizeSeedOnGenerate}

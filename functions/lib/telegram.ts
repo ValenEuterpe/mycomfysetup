@@ -158,6 +158,23 @@ export function inlineKeyboard(rows: [string, string][][]): Record<string, any> 
 }
 
 /**
+ * Registers the bot's slash-command menu (Telegram's "/" dropdown).
+ * Global scope, so it only needs to be set once per bot.
+ */
+export async function setTelegramCommands(
+  token: string,
+  commands: { command: string; description: string }[]
+): Promise<boolean> {
+  const result = await callBotApi(
+    token,
+    "setMyCommands",
+    JSON.stringify({ commands }),
+    true
+  );
+  return Boolean(result.ok);
+}
+
+/**
  * Sends a media blob as a photo; falls back to sendDocument if the
  * payload is too large for the photo endpoint (10MB cap).
  */

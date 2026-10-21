@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { ChevronDown, Cpu, Wrench } from "lucide-react";
-import { ExtractedParameter } from "../../types/workflow";
+import { ComfyWorkflowGraph, ExtractedParameter } from "../../types/workflow";
+import { getRatioSupportForGraph } from "../../lib/ratioSupport";
 import { PromptField } from "./PromptField";
 import { DimensionField } from "./DimensionField";
 import { SamplerField } from "./SamplerField";
@@ -8,6 +9,7 @@ import { MediaUploadField } from "./MediaUploadField";
 
 interface DynamicFormProps {
   parameters: ExtractedParameter[];
+  workflowGraph?: ComfyWorkflowGraph | null;
   onParameterChange: (paramId: string, value: any) => void;
   randomizeSeedOnGenerate: boolean;
   onToggleRandomizeSeed: (val: boolean) => void;
@@ -16,6 +18,7 @@ interface DynamicFormProps {
 
 export const DynamicForm: React.FC<DynamicFormProps> = ({
   parameters,
+  workflowGraph,
   onParameterChange,
   randomizeSeedOnGenerate,
   onToggleRandomizeSeed,
@@ -44,11 +47,12 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
         />
       ))}
 
-      {/* Dimensions & Aspect Ratio */}
+      {/* Dimensions & Aspect Ratio (ratio presets derived from the graph) */}
       {dimensionParams.length > 0 && (
         <DimensionField
           parameters={dimensionParams}
           onParameterChange={onParameterChange}
+          ratioSupport={getRatioSupportForGraph(workflowGraph)}
         />
       )}
 
