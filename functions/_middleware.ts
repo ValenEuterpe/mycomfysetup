@@ -18,8 +18,8 @@ export const onRequest = async (context: {
     return next();
   }
 
-  // Public routes: login endpoint + bot webhooks
-  const publicPaths = ["/api/auth", "/api/telegram", "/api/discord"];
+  // Public routes: login endpoint + bot webhooks + ratio cheat-sheet asset (fetched by the bot without a session cookie)
+  const publicPaths = ["/api/auth", "/api/telegram", "/api/discord", "/aspectratio.jpg"];
   if (publicPaths.some((p) => url.pathname === p || url.pathname.startsWith(p + "/"))) {
     return next();
   }

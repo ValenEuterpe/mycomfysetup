@@ -22,7 +22,11 @@ async function callBotApi(
     headers: json ? { "Content-Type": "application/json" } : undefined,
     body: json ? (body as string) : (body as FormData),
   });
-  return res.json();
+  const data = await res.json();
+  if (!data.ok) {
+    console.error(`[telegram] ${method} failed (${res.status}): ${data.description || "unknown error"}`);
+  }
+  return data;
 }
 
 export interface TelegramMessageOptions {
@@ -186,30 +190,24 @@ export async function sendTelegramMedia(
   caption?: string,
   options: { parseMode?: "HTML"; replyMarkup?: Record<string, any> } = {}
 ): Promise<void> {
-  const extra = () => {
+  const buildForm = (kind: "photo" | "document") => {
+    const form = new FormData();
+    form.append("chat_id", String(chatId));
+    if (caption) form.append("caption", caption);
     if (options.parseMode) form.append("parse_mode", options.parseMode);
     if (options.replyMarkup) form.append("reply_markup", JSON.stringify(options.replyMarkup));
+    form.append(kind, blob, filename);
+    return form;
   };
-
-  const form = new FormData();
-  form.append("chat_id", String(chatId));
-  if (caption) form.append("caption", caption);
-  extra();
 
   const isSmallImage = blob.size <= 10 * 1024 * 1024 && !filename.match(/\.(mp4|webm|gif)$/i);
   if (isSmallImage) {
-    form.append("photo", blob, filename);
-    const result = await callBotApi(token, "sendPhoto", form);
+    const result = await callBotApi(token, "sendPhoto", buildForm("photo"));
     if (result.ok) return;
   }
 
   // Fallback: send as document (50MB cap)
-  const docForm = new FormData();
-  docForm.append("chat_id", String(chatId));
-  if (caption) docForm.append("caption", caption);
-  extra();
-  docForm.append("document", blob, filename);
-  const docResult = await callBotApi(token, "sendDocument", docForm);
+  const docResult = await callBotApi(token, "sendDocument", buildForm("document"));
   if (!docResult.ok) {
     throw new Error(`Telegram sendDocument failed: ${docResult.description || "unknown error"}`);
   }
