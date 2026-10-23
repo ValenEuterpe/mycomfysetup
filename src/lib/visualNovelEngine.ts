@@ -192,8 +192,47 @@ export async function generateCharacterPortrait(
 }
 
 /**
+ * Detects whether a character is male or female based on explicit gender tag or prompt keywords.
+ */
+export function detectCharacterGender(c: VNCharacter): "male" | "female" {
+  if (c.gender === "male") return "male";
+  if (c.gender === "female") return "female";
+  const text = `${c.verbatimIdentityPrompt} ${c.userPrompt}`.toLowerCase();
+  if (/\b(1man|1boy|male|man|boy|guy|husband|father|gentleman|brother|he|his)\b/.test(text)) {
+    return "male";
+  }
+  return "female";
+}
+
+/**
+ * Returns exact Danbooru multi-subject composition tags to prevent gender and identity bleeding.
+ */
+export function getDanbooruGenderCountTag(characters: VNCharacter[]): string {
+  if (characters.length === 0) return "scenery, no humans";
+  const genders = characters.map(detectCharacterGender);
+  const males = genders.filter((g) => g === "male").length;
+  const females = genders.filter((g) => g === "female").length;
+
+  if (characters.length === 1) {
+    return males === 1 ? "1boy, solo" : "1girl, solo";
+  }
+  if (characters.length === 2) {
+    if (males === 1 && females === 1) return "1boy and 1girl, 1boy, 1girl";
+    if (females === 2) return "2girls";
+    return "2boys";
+  }
+  if (characters.length === 3) {
+    if (males === 1 && females === 2) return "1boy and 2girls, 1boy, 2girls";
+    if (males === 2 && females === 1) return "2boys and 1girl, 2boys, 1girl";
+    if (females === 3) return "3girls";
+    return "3boys";
+  }
+  return "multiple people";
+}
+
+/**
  * Builds the composite Anima prompt for a scene, guaranteeing that the verbatim identity
- * prompts of all present characters (up to 3 max) are included.
+ * prompts of all present characters (up to 3 max) are included and segmented with exact gender tags.
  */
 export function buildScenePrompt(
   scene: VNScene,
@@ -205,22 +244,22 @@ export function buildScenePrompt(
     .map((name) => allCharacters.find((c) => c.name.toLowerCase() === name.toLowerCase()))
     .filter((c): c is VNCharacter => !!c);
 
-  const charCountTag =
-    presentChars.length === 1
-      ? "1person, solo"
-      : presentChars.length === 2
-      ? "2people, duo"
-      : presentChars.length === 3
-      ? "3people, trio"
-      : "scenery, no humans";
+  const charCountTag = getDanbooruGenderCountTag(presentChars);
 
-  // Check if scene.imagePrompt already contains verbatim prompts
   let composed = scene.imagePrompt.trim();
+
+  // Strip generic count tags if LLM placed them at the start
+  composed = composed
+    .replace(/^(2people,\s*duo|3people,\s*trio|1person,\s*solo),\s*/i, "")
+    .replace(/\bboth\s+wearing\b/gi, "individually wearing");
 
   // If the prompt doesn't already reference the characters' verbatim descriptions, append them
   const missingPrompts = presentChars
-    .filter((c) => !composed.includes(c.verbatimIdentityPrompt.slice(0, 30)))
-    .map((c) => `[Character ${c.name}: ${c.verbatimIdentityPrompt}]`);
+    .filter((c) => !composed.includes(c.verbatimIdentityPrompt.slice(0, 25)))
+    .map((c) => {
+      const gTag = detectCharacterGender(c) === "male" ? "1man" : "1woman";
+      return `[Character ${c.name}: ${gTag}, ${c.verbatimIdentityPrompt}]`;
+    });
 
   if (missingPrompts.length > 0) {
     composed = `${composed}, ${missingPrompts.join(", ")}`;

@@ -149,6 +149,29 @@ export function loadVNCharacters(): VNCharacter[] {
   }
 }
 
+/**
+ * Fetches characters saved in Cloudflare KV memory and merges with local storage.
+ */
+export async function fetchCharactersFromKV(): Promise<VNCharacter[]> {
+  try {
+    const res = await fetch("/api/characters");
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (Array.isArray(data?.characters) && data.characters.length > 0) {
+      const local = loadVNCharacters();
+      const mergedMap = new Map<string, VNCharacter>();
+      data.characters.forEach((c: VNCharacter) => mergedMap.set(c.id, c));
+      local.forEach((c: VNCharacter) => mergedMap.set(c.id, c));
+      const merged = Array.from(mergedMap.values());
+      localStorage.setItem(STORAGE_KEYS.VN_CHARACTERS, JSON.stringify(merged));
+      return merged;
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
 export function saveVNCharacter(char: VNCharacter): void {
   try {
     const current = loadVNCharacters();
@@ -161,6 +184,13 @@ export function saveVNCharacter(char: VNCharacter): void {
       updated = [char, ...current];
     }
     localStorage.setItem(STORAGE_KEYS.VN_CHARACTERS, JSON.stringify(updated));
+
+    // Background sync to Cloudflare KV memory (stores text prompt & identity)
+    fetch("/api/characters", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ character: char }),
+    }).catch(() => {});
   } catch {}
 }
 
@@ -169,6 +199,11 @@ export function deleteVNCharacter(id: string): void {
     const current = loadVNCharacters();
     const updated = current.filter((c) => c.id !== id);
     localStorage.setItem(STORAGE_KEYS.VN_CHARACTERS, JSON.stringify(updated));
+
+    // Background delete from Cloudflare KV memory
+    fetch(`/api/characters?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }).catch(() => {});
   } catch {}
 }
 

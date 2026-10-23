@@ -325,26 +325,35 @@ export async function planVisualNovelScenes(
       (c, idx) =>
         `[Character ${idx + 1}]
 Name: ${c.name}
-Verbatim Identity Prompt: ${c.verbatimIdentityPrompt}`
+Gender: ${c.gender || "unspecified"}
+Verbatim Physical Identity: ${c.verbatimIdentityPrompt}`
     )
     .join("\n\n");
 
-  const systemPrompt = `You are a visual novel director and scenario writer.
+  const systemPrompt = `You are a master visual novel director and scenario writer.
 You will turn the user's story outline into ${sceneCount} sequential visual novel scenes.
 
-RULES:
-1. Maximum 3 characters per scene (can be 0, 1, 2, or 3).
-2. For each scene, you MUST generate:
-   - "title": A short evocative scene title.
-   - "charactersPresent": Array of character names present in the scene (max 3, must match character names).
-   - "imagePrompt": A diffusion prompt for the Anima anime model.
-     CRITICAL: For every character present in this scene, YOU MUST INCLUDE THEIR EXACT VERBATIM IDENTITY PROMPT word-for-word, followed by their scene-specific clothing, dynamic pose, facial expression, and the scene environment/action/lighting/camera angle!
-   - "narration": 1-2 sentences of narrator description/setting exposition (optional; leave empty string if not needed).
-   - "dialogues": Array of dialogue items: { "speaker": string, "text": string, "voiceCue": string }
-     - "speaker": Character name or "Narrator"
-     - "text": The spoken line
-     - "voiceCue": Short performance / tone / emotional cue (e.g. "shivering in fear", "commanding tone", "soft whisper", "gasping for breath").
-3. Return STRICT JSON with the schema:
+CRITICAL RULES FOR "imagePrompt" (DIFFUSION MODEL PROMPT):
+1. Maximum 3 characters per scene (0, 1, 2, or 3).
+2. NEVER USE COLLECTIVE CLOTHING PHRASES:
+   - FORBIDDEN: "both wearing...", "all wearing...", or identical clothes. Collective clothing causes diffusion models to clone the same character across the scene!
+   - MANDATORY: For EVERY character in the scene, write their clothes SEPARATELY WITH HIGH VISUAL CONTRAST in colors, garment types, and style.
+     Example:
+     - Male character: "wearing a torn white dress shirt unbuttoned at collar, rolled up wet sleeves, ripped dark navy trousers, barefoot"
+     - Female character: "wearing a waterlogged emerald green silk blouse, torn knee-length beige skirt, soaked fabric"
+3. DISTINCT POSES & POSITIONS:
+   - Give each character a distinct non-mirroring pose and placement so they do not duplicate each other.
+   - Example: "Character A is lying on his stomach coughing seawater on the sand, while Character B is sitting on her knees looking back at the smoking airplane wreckage."
+4. STRUCTURE OF "imagePrompt":
+   For every character present, include their gender tag ("1man" or "1woman"), character name, their EXACT verbatim physical identity prompt word-for-word, followed immediately by their specific unique outfit and unique pose:
+   "[Character 1 Name]: 1man, <Character 1 verbatim identity>, wearing <outfit 1>, <pose 1>, and [Character 2 Name]: 1woman, <Character 2 verbatim identity>, wearing <outfit 2>, <pose 2>, <scene environment, background wreckage, lighting, camera angle>"
+5. DIALOGUE & NARRATION:
+   - "title": Short evocative scene title.
+   - "charactersPresent": Array of character names present (max 3).
+   - "narration": 1-2 sentences of narrator description/setting exposition (optional, empty string if none).
+   - "dialogues": Array of { "speaker": string, "text": string, "voiceCue": string } where voiceCue is an expressive acting note (e.g. "shivering in fear", "commanding tone", "soft whisper", "gasping for breath").
+
+Return STRICT JSON with the schema:
 {
   "scenes": [
     {

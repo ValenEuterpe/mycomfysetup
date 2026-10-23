@@ -17,12 +17,14 @@ import {
   Settings as SettingsIcon,
   Plus,
   Info,
+  Cloud,
 } from "lucide-react";
 import { VNCharacter, VNScene, VNStory } from "../types/visualNovel";
 import {
   loadVNCharacters,
   saveVNCharacter,
   deleteVNCharacter,
+  fetchCharactersFromKV,
   loadVNStories,
   saveVNStory,
 } from "../lib/storage";
@@ -60,6 +62,7 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
 
   // New Character Creation Form
   const [charName, setCharName] = useState("");
+  const [charGender, setCharGender] = useState<"female" | "male">("female");
   const [charPrompt, setCharPrompt] = useState("");
   const [figureStyle, setFigureStyle] = useState("Auto");
   const [faceShape, setFaceShape] = useState("Auto");
@@ -69,6 +72,7 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
   const [isGeneratingPortrait, setIsGeneratingPortrait] = useState(false);
   const [portraitStatus, setPortraitStatus] = useState("");
   const [charFormError, setCharFormError] = useState<string | null>(null);
+  const [isCloudSynced, setIsCloudSynced] = useState<boolean>(false);
 
   // Story & Generation State
   const [storyPremise, setStoryPremise] = useState(
@@ -93,13 +97,22 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
   const [continuePrompt, setContinuePrompt] = useState("");
   const [isContinuing, setIsContinuing] = useState(false);
 
-  // Refresh characters from storage on mount
+  // Refresh characters from storage & sync with Cloudflare KV memory on mount
   useEffect(() => {
+    // 1. Initial load from browser local storage
     const chars = loadVNCharacters();
     setCharacters(chars);
     if (chars.length > 0 && selectedCharIds.length === 0) {
       setSelectedCharIds(chars.slice(0, 2).map((c) => c.id));
     }
+
+    // 2. Fetch and merge from Cloudflare KV memory
+    fetchCharactersFromKV().then((kvChars) => {
+      if (kvChars && kvChars.length > 0) {
+        setCharacters(kvChars);
+        setIsCloudSynced(true);
+      }
+    });
   }, []);
 
   // Character selection toggle (Max 3 characters)
@@ -192,7 +205,10 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
     const newChar: VNCharacter = {
       id: `char_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       name: charName.trim(),
+      gender: charGender,
       userPrompt: charPrompt.trim(),
+      figureStyle: figureStyle !== "Auto" ? figureStyle : undefined,
+      faceShape: faceShape !== "Auto" ? faceShape : undefined,
       verbatimIdentityPrompt: finalPrompt,
       avatarUrl: charAvatarUrl,
       createdAt: Date.now(),
@@ -201,6 +217,7 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
     saveVNCharacter(newChar);
     const updated = loadVNCharacters();
     setCharacters(updated);
+    setIsCloudSynced(true);
 
     // Auto-select if under 3
     if (selectedCharIds.length < 3) {
@@ -209,6 +226,7 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
 
     // Reset Form
     setCharName("");
+    setCharGender("female");
     setCharPrompt("");
     setFigureStyle("Auto");
     setFaceShape("Auto");
@@ -519,18 +537,49 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
                 </div>
               )}
 
-              {/* Character Name */}
-              <div>
-                <label className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-1.5">
-                  Character Name
-                </label>
-                <input
-                  type="text"
-                  value={charName}
-                  onChange={(e) => setCharName(e.target.value)}
-                  placeholder="e.g. Elena, Captain Mark, Aoi"
-                  className="w-full bg-zinc-950 border border-zinc-800 focus:border-fuchsia-500 focus:ring-1 focus:ring-fuchsia-500 rounded-xl px-4 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 transition-colors shadow-inner"
-                />
+              {/* Character Name & Gender */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                <div className="sm:col-span-8">
+                  <label className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-1.5">
+                    Character Name
+                  </label>
+                  <input
+                    type="text"
+                    value={charName}
+                    onChange={(e) => setCharName(e.target.value)}
+                    placeholder="e.g. Elena, Captain Mark, Aoi"
+                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-fuchsia-500 focus:ring-1 focus:ring-fuchsia-500 rounded-xl px-4 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 transition-colors shadow-inner"
+                  />
+                </div>
+                <div className="sm:col-span-4">
+                  <label className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-1.5">
+                    Gender Anchor
+                  </label>
+                  <div className="flex p-1 rounded-xl bg-zinc-950 border border-zinc-800">
+                    <button
+                      type="button"
+                      onClick={() => setCharGender("female")}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                        charGender === "female"
+                          ? "bg-fuchsia-600 text-white shadow-sm"
+                          : "text-zinc-400 hover:text-zinc-200"
+                      }`}
+                    >
+                      ♀ Female
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCharGender("male")}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                        charGender === "male"
+                          ? "bg-indigo-600 text-white shadow-sm"
+                          : "text-zinc-400 hover:text-zinc-200"
+                      }`}
+                    >
+                      ♂ Male
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* User Character Description */}
@@ -719,7 +768,16 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
               <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-5 flex flex-col gap-4 shadow-xl">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-bold text-white">Your Character Roster</h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-bold text-white">Your Character Roster</h3>
+                      <span
+                        className="flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20"
+                        title="Characters backed up to Cloudflare KV memory"
+                      >
+                        <Cloud className="w-3 h-3" />
+                        <span>Cloud KV</span>
+                      </span>
+                    </div>
                     <p className="text-xs text-zinc-400">
                       Select up to 3 characters for your story
                     </p>
@@ -762,9 +820,18 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
                           {/* Info */}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between gap-2 mb-1">
-                              <h4 className="text-sm font-bold text-white truncate">
-                                {c.name}
-                              </h4>
+                              <div className="flex items-center gap-1.5 truncate">
+                                <h4 className="text-sm font-bold text-white truncate">
+                                  {c.name}
+                                </h4>
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                                  c.gender === "male"
+                                    ? "bg-indigo-500/10 text-indigo-300 border border-indigo-500/20"
+                                    : "bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20"
+                                }`}>
+                                  {c.gender === "male" ? "♂ Male" : "♀ Female"}
+                                </span>
+                              </div>
                               <button
                                 type="button"
                                 onClick={() => handleDeleteCharacter(c.id)}

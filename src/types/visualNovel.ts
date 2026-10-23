@@ -1,7 +1,10 @@
 export interface VNCharacter {
   id: string;
   name: string;
+  gender?: "male" | "female" | "other";
   userPrompt: string;
+  figureStyle?: string;
+  faceShape?: string;
   /** Exact verbatim prompt describing bodily and facial proportions, hair, eyes, etc. */
   verbatimIdentityPrompt: string;
   avatarUrl?: string;
