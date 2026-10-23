@@ -18,8 +18,10 @@ import {
   Plus,
   Info,
   Cloud,
+  FileText,
 } from "lucide-react";
-import { VNCharacter, VNScene, VNStory } from "../types/visualNovel";
+import { VNCharacter, VNScene, VNStory, VNTab } from "../types/visualNovel";
+import { StoryLedger } from "../components/novel/StoryLedger";
 import {
   loadVNCharacters,
   saveVNCharacter,
@@ -43,15 +45,27 @@ import { saveMediaToLocalCache } from "../lib/mediaCache";
 interface VisualNovelPageProps {
   endpoint: string;
   onOpenSettings: () => void;
+  activeTab?: VNTab;
+  onTabChange?: (tab: VNTab) => void;
+  onCountsChange?: (characterCount: number, sceneCount: number) => void;
 }
-
-type VNTab = "characters" | "story" | "reader";
 
 export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
   endpoint,
   onOpenSettings,
+  activeTab: controlledTab,
+  onTabChange,
+  onCountsChange,
 }) => {
-  const [activeTab, setActiveTab] = useState<VNTab>("characters");
+  const [internalTab, setInternalTab] = useState<VNTab>("characters");
+  const activeTab = controlledTab ?? internalTab;
+  const setActiveTab = (tab: VNTab) => {
+    if (onTabChange) {
+      onTabChange(tab);
+    } else {
+      setInternalTab(tab);
+    }
+  };
 
   // Character State
   const [characters, setCharacters] = useState<VNCharacter[]>(loadVNCharacters);
@@ -114,6 +128,11 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
       }
     });
   }, []);
+
+  // Keep parent counts updated for top navigation badges
+  useEffect(() => {
+    onCountsChange?.(characters.length, scenes.length);
+  }, [characters.length, scenes.length, onCountsChange]);
 
   // Character selection toggle (Max 3 characters)
   const toggleCharSelection = (id: string) => {
@@ -406,7 +425,7 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
     const currentScene = scenes[currentSceneIndex];
     if (!currentScene) return;
 
-    if (currentDialogueIndex < currentScene.dialogues.length - 1) {
+    if (currentDialogueIndex < (currentScene.dialogues?.length || 1) - 1) {
       setCurrentDialogueIndex((prev) => prev + 1);
     } else if (currentSceneIndex < scenes.length - 1) {
       setCurrentSceneIndex((prev) => prev + 1);
@@ -423,6 +442,34 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
       setCurrentDialogueIndex(Math.max(0, (prevScene.dialogues?.length || 1) - 1));
     }
   };
+
+  // Keyboard navigation for Reader Mode
+  useEffect(() => {
+    if (activeTab !== "reader") return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (e.key === " " || e.key === "ArrowRight") {
+        e.preventDefault();
+        handleNextDialogue();
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        handlePrevDialogue();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeTab, currentSceneIndex, currentDialogueIndex, scenes]);
 
   // Autoplay effect
   useEffect(() => {
@@ -442,70 +489,12 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
   const activeCharacters = characters.filter((c) => selectedCharIds.includes(c.id));
   const currentScene = scenes[currentSceneIndex];
   const currentDialogue = currentScene?.dialogues?.[currentDialogueIndex];
+  const speakerChar = characters.find(
+    (c) => c.name.toLowerCase() === currentDialogue?.speaker?.toLowerCase()
+  );
 
   return (
     <div className="flex-1 flex flex-col bg-zinc-950 text-zinc-100 min-h-screen">
-      {/* Visual Novel Header Bar */}
-      <div className="border-b border-zinc-800 bg-zinc-900/60 backdrop-blur-md px-4 py-3 flex items-center justify-between sticky top-[57px] z-30">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-fuchsia-600 to-indigo-600 flex items-center justify-center shadow-md shadow-fuchsia-600/20">
-            <Film className="w-4 h-4 text-white" />
-          </div>
-          <div>
-            <h1 className="text-sm font-bold text-white flex items-center gap-2">
-              Visual Novel Maker
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/20">
-                Anima T2I Engine
-              </span>
-            </h1>
-            <p className="text-[11px] text-zinc-400">
-              Open public studio: characters, story generation, and cinematic reader
-            </p>
-          </div>
-        </div>
-
-        {/* Step Navigation Tabs */}
-        <div className="flex items-center gap-1 p-1 rounded-xl bg-zinc-900 border border-zinc-800">
-          <button
-            type="button"
-            onClick={() => setActiveTab("characters")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-              activeTab === "characters"
-                ? "bg-fuchsia-600 text-white shadow-sm"
-                : "text-zinc-400 hover:text-zinc-100"
-            }`}
-          >
-            <UserPlus className="w-3.5 h-3.5" />
-            1. Characters ({characters.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("story")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-              activeTab === "story"
-                ? "bg-fuchsia-600 text-white shadow-sm"
-                : "text-zinc-400 hover:text-zinc-100"
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            2. Story & Scenes
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("reader")}
-            disabled={scenes.length === 0}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-40 ${
-              activeTab === "reader"
-                ? "bg-fuchsia-600 text-white shadow-sm"
-                : "text-zinc-400 hover:text-zinc-100"
-            }`}
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            3. Play Novel {scenes.length > 0 && `(${scenes.length})`}
-          </button>
-        </div>
-      </div>
-
       {/* Main Content Area */}
       <div className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-6 flex flex-col gap-6">
         {/* ========================================================================= */}
@@ -1012,14 +1001,25 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
                     <Film className="w-4 h-4 text-fuchsia-400" />
                     Story Scenes ({scenes.length})
                   </h3>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("reader")}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-500 text-xs font-semibold text-white shadow-sm transition-colors"
-                  >
-                    <BookOpen className="w-3.5 h-3.5" />
-                    <span>Launch Reader Mode</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("ledger")}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 hover:text-white border border-zinc-700/60 shadow-sm transition-colors"
+                      title="Inspect full AI outputs, verbatim prompts, dialogues, and ledger JSON"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-fuchsia-400" />
+                      <span>Story Ledger</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("reader")}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-500 text-xs font-semibold text-white shadow-sm transition-colors"
+                    >
+                      <BookOpen className="w-3.5 h-3.5" />
+                      <span>Launch Reader Mode</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1135,8 +1135,8 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
         {/* ========================================================================= */}
         {activeTab === "reader" && (
           <div className="flex flex-col gap-4 max-w-5xl mx-auto w-full">
-            {/* Cinematic Stage Box */}
-            <div className="relative w-full aspect-[16/9] bg-black rounded-3xl overflow-hidden border border-zinc-800 shadow-2xl flex flex-col justify-end select-none">
+            {/* Cinematic Stage Box (Pure Artwork Viewport) */}
+            <div className="relative w-full aspect-[16/9] bg-black rounded-2xl sm:rounded-3xl overflow-hidden border border-zinc-800 shadow-2xl flex flex-col justify-between select-none">
               {/* Scene Background Image */}
               {currentScene?.imageUrl ? (
                 <img
@@ -1145,89 +1145,158 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
                   className="absolute inset-0 w-full h-full object-cover transition-opacity duration-500"
                 />
               ) : (
-                <div className="absolute inset-0 bg-gradient-to-b from-zinc-900 to-zinc-950 flex items-center justify-center">
-                  <span className="text-xs text-zinc-500">
-                    {currentScene?.isGenerating
-                      ? "Generating scene image..."
-                      : "No image for this scene"}
-                  </span>
+                <div className="absolute inset-0 bg-gradient-to-b from-zinc-900 to-zinc-950 flex flex-col items-center justify-center p-6 text-center">
+                  {currentScene?.isGenerating ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <Loader2 className="w-10 h-10 animate-spin text-fuchsia-400" />
+                      <span className="text-sm font-semibold text-fuchsia-300">
+                        {currentScene.statusText || "Rendering Anima scene..."}
+                      </span>
+                      {currentScene.progressPercent !== undefined && (
+                        <div className="w-48 h-2 bg-zinc-800 rounded-full overflow-hidden mt-1">
+                          <div
+                            className="h-full bg-gradient-to-r from-fuchsia-500 to-indigo-500 transition-all duration-300"
+                            style={{ width: `${currentScene.progressPercent}%` }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2">
+                      <Film className="w-10 h-10 text-zinc-700" />
+                      <span className="text-sm text-zinc-400 font-medium">
+                        {currentScene ? "No image rendered yet for this scene" : "No scenes available"}
+                      </span>
+                      {currentScene && (
+                        <button
+                          type="button"
+                          onClick={() => generateSceneImageRun(currentScene, activeCharacters)}
+                          className="mt-2 text-xs font-semibold text-white bg-zinc-800 hover:bg-zinc-700 px-3.5 py-1.5 rounded-xl border border-zinc-700 transition-colors"
+                        >
+                          Render Image Now
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Scene Top Info Bar */}
-              <div className="absolute top-4 inset-x-4 flex items-center justify-between pointer-events-none">
-                <div className="px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-xs font-semibold text-white pointer-events-auto">
-                  Scene {currentSceneIndex + 1} of {scenes.length}: {currentScene?.title}
+              {/* Scene Top Info Bar (HUD overlay) */}
+              <div className="relative z-10 p-3 sm:p-4 flex items-center justify-between bg-gradient-to-b from-black/85 via-black/40 to-transparent">
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded-full bg-black/70 backdrop-blur-md border border-white/10 text-xs font-bold text-white shadow-md">
+                    Scene {currentSceneIndex + 1} of {scenes.length}
+                  </span>
+                  <span className="hidden sm:inline-block text-xs font-medium text-zinc-200 drop-shadow">
+                    {currentScene?.title}
+                  </span>
                 </div>
 
-                <div className="flex items-center gap-2 pointer-events-auto">
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setIsAutoPlay(!isAutoPlay)}
-                    className={`px-3 py-1 rounded-full text-xs font-semibold backdrop-blur-md border transition-colors flex items-center gap-1.5 ${
+                    className={`px-3 py-1 rounded-full text-xs font-semibold backdrop-blur-md border transition-all flex items-center gap-1.5 shadow-md ${
                       isAutoPlay
-                        ? "bg-fuchsia-600 text-white border-fuchsia-400 shadow-md shadow-fuchsia-600/30"
-                        : "bg-black/60 text-zinc-300 border-white/10 hover:text-white"
+                        ? "bg-fuchsia-600 text-white border-fuchsia-400 shadow-fuchsia-600/30"
+                        : "bg-black/70 text-zinc-300 border-white/15 hover:text-white hover:bg-black/90"
                     }`}
                   >
-                    <Volume2 className="w-3 h-3" />
+                    <Volume2 className="w-3.5 h-3.5" />
                     <span>{isAutoPlay ? "Autoplay ON" : "Autoplay"}</span>
+                  </button>
+
+                  {currentScene && (
+                    <button
+                      type="button"
+                      onClick={() => generateSceneImageRun(currentScene, activeCharacters)}
+                      disabled={currentScene.isGenerating || !!currentGeneratingSceneId}
+                      className="p-1.5 rounded-full bg-black/70 backdrop-blur-md border border-white/15 text-zinc-300 hover:text-white hover:bg-black/90 transition-colors disabled:opacity-40"
+                      title="Regenerate this scene image"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Bottom Subtle Artwork Shade */}
+              <div className="h-6 bg-gradient-to-t from-black/30 to-transparent pointer-events-none" />
+            </div>
+
+            {/* Dedicated Dialogue Card BELOW the Artwork */}
+            <div
+              onClick={handleNextDialogue}
+              className="bg-zinc-900/90 border border-zinc-800 hover:border-zinc-700/80 rounded-2xl p-4 sm:p-5 shadow-xl transition-all cursor-pointer group flex flex-col gap-3 select-none"
+            >
+              {/* Speaker Bar & Line Navigation */}
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  {speakerChar?.avatarUrl ? (
+                    <img
+                      src={speakerChar.avatarUrl}
+                      alt={speakerChar.name}
+                      className="w-11 h-11 rounded-xl object-cover ring-2 ring-fuchsia-500/40 shadow-md shrink-0"
+                    />
+                  ) : (
+                    <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-fuchsia-600/30 to-indigo-600/30 border border-fuchsia-500/30 flex items-center justify-center shrink-0">
+                      <BookOpen className="w-5 h-5 text-fuchsia-400" />
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-bold text-white tracking-wide">
+                        {currentDialogue?.speaker || (currentScene?.narration ? "Narrator" : "Story")}
+                      </span>
+                      {currentDialogue?.voiceCue && (
+                        <span className="text-[11px] font-medium text-fuchsia-300 bg-fuchsia-500/10 px-2 py-0.5 rounded-md border border-fuchsia-500/20 italic">
+                          [{currentDialogue.voiceCue}]
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-zinc-400">
+                      Line {currentDialogueIndex + 1} of {currentScene?.dialogues?.length || 1}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Reader Controls */}
+                <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    onClick={handlePrevDialogue}
+                    disabled={currentSceneIndex === 0 && currentDialogueIndex === 0}
+                    className="p-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                    title="Previous dialogue line (Left Arrow)"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNextDialogue}
+                    className="px-3.5 py-2 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-500 text-white shadow-md shadow-fuchsia-600/20 transition-all flex items-center gap-1.5 text-xs font-semibold"
+                    title="Next dialogue line (Space or Right Arrow)"
+                  >
+                    <span>Next</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
 
-              {/* Visual Novel Dialogue Box Overlay */}
-              <div
-                onClick={handleNextDialogue}
-                className="relative z-10 m-4 sm:m-6 p-4 sm:p-5 rounded-2xl bg-zinc-950/85 backdrop-blur-md border border-white/15 shadow-2xl cursor-pointer hover:border-fuchsia-500/40 transition-all flex flex-col gap-2"
-              >
-                {/* Speaker Badge & Voice Cue */}
-                <div className="flex items-center gap-2">
-                  <span className="px-3 py-0.5 rounded-full text-xs font-bold bg-fuchsia-500 text-white shadow-sm">
-                    {currentDialogue?.speaker || (currentScene?.narration ? "Narrator" : "Story")}
-                  </span>
-                  {currentDialogue?.voiceCue && (
-                    <span className="text-[11px] font-medium text-fuchsia-300 bg-fuchsia-500/10 px-2 py-0.5 rounded-md border border-fuchsia-500/20 italic">
-                      [{currentDialogue.voiceCue}]
-                    </span>
-                  )}
-                </div>
-
-                {/* Spoken Text / Narration */}
-                <p className="text-sm sm:text-base text-zinc-100 font-medium leading-relaxed tracking-wide min-h-[48px]">
+              {/* Dialogue Text / Narration */}
+              <div className="min-h-[56px] flex items-center bg-zinc-950/60 rounded-xl p-3.5 sm:p-4 border border-zinc-800/80">
+                <p className="text-sm sm:text-base text-zinc-100 font-medium leading-relaxed tracking-wide font-sans">
                   {currentDialogue?.text || currentScene?.narration || "..."}
                 </p>
+              </div>
 
-                {/* Controls & Progress Dots inside Dialogue Box */}
-                <div className="flex items-center justify-between pt-1 border-t border-zinc-800/60 mt-1">
-                  <span className="text-[11px] text-zinc-500">
-                    Line {currentDialogueIndex + 1} of {currentScene?.dialogues?.length || 1} • Click anywhere to continue
-                  </span>
-
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePrevDialogue();
-                      }}
-                      disabled={currentSceneIndex === 0 && currentDialogueIndex === 0}
-                      className="p-1 rounded text-zinc-400 hover:text-white disabled:opacity-30"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleNextDialogue();
-                      }}
-                      className="p-1 rounded text-zinc-400 hover:text-white"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
+              {/* Advance Hint & Status */}
+              <div className="flex items-center justify-between text-[11px] text-zinc-400 pt-0.5">
+                <span className="hidden sm:inline">Click card or press Space / Right Arrow to advance</span>
+                <span className="sm:hidden">Tap card to advance</span>
+                <span className="group-hover:text-fuchsia-400 transition-colors flex items-center gap-1 font-medium">
+                  Next line <ChevronRight className="w-3 h-3" />
+                </span>
               </div>
             </div>
 
@@ -1284,6 +1353,20 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
                 <span>Add Next Scene</span>
               </button>
             </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 4: STORY LEDGER (Comprehensive AI Output & Analysis) */}
+        {/* ========================================================================= */}
+        {activeTab === "ledger" && (
+          <div className="max-w-5xl mx-auto w-full">
+            <StoryLedger
+              storyPremise={storyPremise}
+              firstSceneOutline={firstSceneOutline}
+              characters={characters}
+              scenes={scenes}
+            />
           </div>
         )}
       </div>

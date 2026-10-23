@@ -11,8 +11,13 @@ import {
   ImagePlus,
   Wand2,
   Film,
+  UserPlus,
+  Layers,
+  BookOpen,
+  FileText,
 } from "lucide-react";
 import { ComfyConnectionTestResult } from "../lib/comfyClient";
+import { VNTab } from "../types/visualNovel";
 
 export type StudioPage = "generate" | "edit" | "novel";
 
@@ -25,6 +30,10 @@ interface NavbarProps {
   onResetParams: () => void;
   activePage: StudioPage;
   onNavigate: (page: StudioPage) => void;
+  vnTab?: VNTab;
+  onVnTabChange?: (tab: VNTab) => void;
+  vnCharacterCount?: number;
+  vnSceneCount?: number;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -36,6 +45,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   onResetParams,
   activePage,
   onNavigate,
+  vnTab = "characters",
+  onVnTabChange,
+  vnCharacterCount,
+  vnSceneCount,
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -108,6 +121,61 @@ export const Navbar: React.FC<NavbarProps> = ({
               Visual Novel
             </button>
           </div>
+
+          {/* Visual Novel Workflow Tabs (when activePage === 'novel') */}
+          {activePage === "novel" && onVnTabChange && (
+            <div className="flex items-center gap-0.5 p-1 rounded-xl bg-zinc-900 border border-zinc-800 animate-in fade-in">
+              <button
+                type="button"
+                onClick={() => onVnTabChange("characters")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  vnTab === "characters"
+                    ? "bg-fuchsia-600 text-white shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-100"
+                }`}
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>1. Characters{vnCharacterCount !== undefined ? ` (${vnCharacterCount})` : ""}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onVnTabChange("story")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  vnTab === "story"
+                    ? "bg-fuchsia-600 text-white shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-100"
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>2. Story</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onVnTabChange("reader")}
+                disabled={!vnSceneCount}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-40 ${
+                  vnTab === "reader"
+                    ? "bg-fuchsia-600 text-white shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-100"
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>3. Play Novel{vnSceneCount ? ` (${vnSceneCount})` : ""}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onVnTabChange("ledger")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  vnTab === "ledger"
+                    ? "bg-fuchsia-600 text-white shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-100"
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>4. Ledger</span>
+              </button>
+            </div>
+          )}
 
           {/* Connection status pill (Clickable to open settings) */}
           <button
@@ -262,6 +330,57 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Mobile Visual Novel compact workflow tabs */}
+      {activePage === "novel" && onVnTabChange && (
+        <div className="md:hidden mt-2 pt-1.5 border-t border-zinc-800/80 flex items-center justify-between gap-1 overflow-x-auto pb-0.5">
+          <button
+            type="button"
+            onClick={() => onVnTabChange("characters")}
+            className={`flex-1 min-w-[70px] py-1.5 px-2 rounded-lg text-[11px] font-semibold text-center transition-colors truncate ${
+              vnTab === "characters"
+                ? "bg-fuchsia-600 text-white shadow-sm"
+                : "text-zinc-400 bg-zinc-900/60"
+            }`}
+          >
+            1. Cast{vnCharacterCount !== undefined ? ` (${vnCharacterCount})` : ""}
+          </button>
+          <button
+            type="button"
+            onClick={() => onVnTabChange("story")}
+            className={`flex-1 min-w-[65px] py-1.5 px-2 rounded-lg text-[11px] font-semibold text-center transition-colors truncate ${
+              vnTab === "story"
+                ? "bg-fuchsia-600 text-white shadow-sm"
+                : "text-zinc-400 bg-zinc-900/60"
+            }`}
+          >
+            2. Story
+          </button>
+          <button
+            type="button"
+            onClick={() => onVnTabChange("reader")}
+            disabled={!vnSceneCount}
+            className={`flex-1 min-w-[70px] py-1.5 px-2 rounded-lg text-[11px] font-semibold text-center transition-colors truncate disabled:opacity-40 ${
+              vnTab === "reader"
+                ? "bg-fuchsia-600 text-white shadow-sm"
+                : "text-zinc-400 bg-zinc-900/60"
+            }`}
+          >
+            3. Play{vnSceneCount ? ` (${vnSceneCount})` : ""}
+          </button>
+          <button
+            type="button"
+            onClick={() => onVnTabChange("ledger")}
+            className={`flex-1 min-w-[65px] py-1.5 px-2 rounded-lg text-[11px] font-semibold text-center transition-colors truncate ${
+              vnTab === "ledger"
+                ? "bg-fuchsia-600 text-white shadow-sm"
+                : "text-zinc-400 bg-zinc-900/60"
+            }`}
+          >
+            4. Ledger
+          </button>
+        </div>
+      )}
 
       {/* Mobile Collapsible Menu */}
       {isMobileMenuOpen && (

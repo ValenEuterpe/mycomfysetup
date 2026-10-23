@@ -47,6 +47,8 @@ export interface VNStory {
   updatedAt: number;
 }
 
+export type VNTab = "characters" | "story" | "reader" | "ledger";
+
 export interface LlmConfig {
   baseUrl: string;
   apiKey: string;

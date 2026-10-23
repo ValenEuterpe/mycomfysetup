@@ -44,6 +44,7 @@ import { GraphInspectorModal } from "./components/GraphInspectorModal";
 import { DeliveryToggles } from "./components/DeliveryToggles";
 import { IdentityEditPage } from "./pages/IdentityEditPage";
 import { VisualNovelPage } from "./pages/VisualNovelPage";
+import { VNTab } from "./types/visualNovel";
 
 /** Reads the current hash or path route; unknown -> generate. */
 function readCurrentPage(): StudioPage {
@@ -92,6 +93,11 @@ export const App: React.FC = () => {
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [showGraphModal, setShowGraphModal] = useState<boolean>(false);
+
+  // Visual Novel Navigation State
+  const [vnTab, setVnTab] = useState<VNTab>("characters");
+  const [vnCharCount, setVnCharCount] = useState<number>(0);
+  const [vnSceneCount, setVnSceneCount] = useState<number>(0);
 
   // 5. Hash routing between Generate, Identity Edit, and Visual Novel pages
   const [page, setPage] = useState<StudioPage>(readCurrentPage);
@@ -463,6 +469,10 @@ export const App: React.FC = () => {
         onResetParams={handleResetParams}
         activePage={page}
         onNavigate={navigate}
+        vnTab={vnTab}
+        onVnTabChange={setVnTab}
+        vnCharacterCount={vnCharCount}
+        vnSceneCount={vnSceneCount}
       />
 
       {page === "edit" ? (
@@ -477,6 +487,12 @@ export const App: React.FC = () => {
         <VisualNovelPage
           endpoint={endpoint}
           onOpenSettings={() => setShowSettingsModal(true)}
+          activeTab={vnTab}
+          onTabChange={setVnTab}
+          onCountsChange={(chars, scenes) => {
+            setVnCharCount(chars);
+            setVnSceneCount(scenes);
+          }}
         />
       ) : (
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col gap-5">
