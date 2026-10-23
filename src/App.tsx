@@ -43,10 +43,16 @@ import { CodeExportModal } from "./components/CodeExportModal";
 import { GraphInspectorModal } from "./components/GraphInspectorModal";
 import { DeliveryToggles } from "./components/DeliveryToggles";
 import { IdentityEditPage } from "./pages/IdentityEditPage";
+import { VisualNovelPage } from "./pages/VisualNovelPage";
 
-/** Reads the current hash route ("#/generate" | "#/edit"); unknown -> generate. */
-function readHashPage(): StudioPage {
-  return location.hash.replace(/^#\/?/, "").toLowerCase() === "edit" ? "edit" : "generate";
+/** Reads the current hash or path route; unknown -> generate. */
+function readCurrentPage(): StudioPage {
+  const path = location.pathname.toLowerCase();
+  if (path.startsWith("/novel") || path.startsWith("/vn")) return "novel";
+  const hash = location.hash.replace(/^#\/?/, "").toLowerCase();
+  if (hash === "edit") return "edit";
+  if (hash === "novel" || hash === "vn") return "novel";
+  return "generate";
 }
 
 export const App: React.FC = () => {
@@ -87,16 +93,16 @@ export const App: React.FC = () => {
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [showGraphModal, setShowGraphModal] = useState<boolean>(false);
 
-  // 5. Hash routing between Generate and Identity Edit pages
-  const [page, setPage] = useState<StudioPage>(readHashPage);
+  // 5. Hash routing between Generate, Identity Edit, and Visual Novel pages
+  const [page, setPage] = useState<StudioPage>(readCurrentPage);
   const navigate = useCallback((next: StudioPage) => {
-    location.hash = next === "edit" ? "#/edit" : "#/generate";
+    location.hash = next === "edit" ? "#/edit" : next === "novel" ? "#/novel" : "#/generate";
     // hashchange listener keeps state in sync; set directly too in case hash is unchanged
     setPage(next);
   }, []);
 
   useEffect(() => {
-    const onHash = () => setPage(readHashPage());
+    const onHash = () => setPage(readCurrentPage());
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -467,6 +473,11 @@ export const App: React.FC = () => {
             deliveryPrefs={deliveryPrefs}
           />
         </main>
+      ) : page === "novel" ? (
+        <VisualNovelPage
+          endpoint={endpoint}
+          onOpenSettings={() => setShowSettingsModal(true)}
+        />
       ) : (
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col gap-5">
         {/* Workflow Switcher & File Dropzone */}

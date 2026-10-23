@@ -1,4 +1,5 @@
 import { GenerationHistoryItem } from "../types/workflow";
+import { VNCharacter, VNStory } from "../types/visualNovel";
 
 const STORAGE_KEYS = {
   ENDPOINT: "comfy_studio_endpoint",
@@ -7,6 +8,8 @@ const STORAGE_KEYS = {
   CUSTOM_PRESETS: "comfy_studio_custom_presets",
   HISTORY: "comfy_studio_history",
   DELIVERY_PREFS: "comfy_studio_delivery_prefs",
+  VN_CHARACTERS: "comfy_studio_vn_characters",
+  VN_STORIES: "comfy_studio_vn_stories",
 };
 
 export const DEFAULT_ENDPOINT =
@@ -136,3 +139,68 @@ export function saveDeliveryPrefs(prefs: DeliveryPrefs): void {
     localStorage.setItem(STORAGE_KEYS.DELIVERY_PREFS, JSON.stringify(prefs));
   } catch {}
 }
+
+export function loadVNCharacters(): VNCharacter[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.VN_CHARACTERS);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveVNCharacter(char: VNCharacter): void {
+  try {
+    const current = loadVNCharacters();
+    const existingIndex = current.findIndex((c) => c.id === char.id);
+    let updated: VNCharacter[];
+    if (existingIndex >= 0) {
+      updated = [...current];
+      updated[existingIndex] = char;
+    } else {
+      updated = [char, ...current];
+    }
+    localStorage.setItem(STORAGE_KEYS.VN_CHARACTERS, JSON.stringify(updated));
+  } catch {}
+}
+
+export function deleteVNCharacter(id: string): void {
+  try {
+    const current = loadVNCharacters();
+    const updated = current.filter((c) => c.id !== id);
+    localStorage.setItem(STORAGE_KEYS.VN_CHARACTERS, JSON.stringify(updated));
+  } catch {}
+}
+
+export function loadVNStories(): VNStory[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.VN_STORIES);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveVNStory(story: VNStory): void {
+  try {
+    const current = loadVNStories();
+    const existingIndex = current.findIndex((s) => s.id === story.id);
+    let updated: VNStory[];
+    if (existingIndex >= 0) {
+      updated = [...current];
+      updated[existingIndex] = story;
+    } else {
+      updated = [story, ...current];
+    }
+    localStorage.setItem(STORAGE_KEYS.VN_STORIES, JSON.stringify(updated));
+  } catch {}
+}
+
+export function deleteVNStory(id: string): void {
+  try {
+    const current = loadVNStories();
+    const updated = current.filter((s) => s.id !== id);
+    localStorage.setItem(STORAGE_KEYS.VN_STORIES, JSON.stringify(updated));
+  } catch {}
+}
+

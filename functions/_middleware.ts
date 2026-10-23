@@ -19,9 +19,26 @@ export const onRequest = async (context: {
   }
 
   // Public routes: login endpoint + bot webhooks + public OpenAI-compatible /v1 API
-  // + ratio cheat-sheet asset (fetched by the bot without a session cookie)
-  const publicPaths = ["/api/auth", "/api/telegram", "/api/discord", "/v1", "/aspectratio.jpg"];
+  // + ratio cheat-sheet asset + public Visual Novel page & proxy
+  const publicPaths = [
+    "/api/auth",
+    "/api/telegram",
+    "/api/discord",
+    "/api/proxy",
+    "/v1",
+    "/aspectratio.jpg",
+    "/novel",
+    "/vn",
+    "/workflows",
+    "/assets",
+    "/favicon.ico",
+  ];
   if (publicPaths.some((p) => url.pathname === p || url.pathname.startsWith(p + "/"))) {
+    // If accessing the public visual novel route directly, serve root index.html
+    if (url.pathname === "/novel" || url.pathname === "/vn") {
+      const rootUrl = new URL("/", request.url);
+      return next(new Request(rootUrl.toString(), request));
+    }
     return next();
   }
 

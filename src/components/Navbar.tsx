@@ -10,10 +10,11 @@ import {
   Link2,
   ImagePlus,
   Wand2,
+  Film,
 } from "lucide-react";
 import { ComfyConnectionTestResult } from "../lib/comfyClient";
 
-export type StudioPage = "generate" | "edit";
+export type StudioPage = "generate" | "edit" | "novel";
 
 interface NavbarProps {
   connectionStatus: ComfyConnectionTestResult | null;
@@ -93,6 +94,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Wand2 className="w-3.5 h-3.5" />
               Identity Edit
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate("novel")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                activePage === "novel"
+                  ? "bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-100"
+              }`}
+            >
+              <Film className="w-3.5 h-3.5" />
+              Visual Novel
             </button>
           </div>
 
@@ -278,6 +291,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Wand2 className="w-4 h-4" />
               Identity Edit
+            </button>
+            <button
+              type="button"
+              onClick={() => handleMobileAction(() => onNavigate("novel"))}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium border transition-colors ${
+                activePage === "novel"
+                  ? "bg-fuchsia-600/20 text-fuchsia-300 border-fuchsia-500/40"
+                  : "text-zinc-300 bg-zinc-900/80 border-zinc-800/60"
+              }`}
+            >
+              <Film className="w-4 h-4" />
+              Visual Novel
             </button>
           </div>
 
