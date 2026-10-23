@@ -231,6 +231,24 @@ export function getDanbooruGenderCountTag(characters: VNCharacter[]): string {
 }
 
 /**
+ * Sanitizes aggressive literary hyperbole (e.g. shouting, screaming, yelling) in conversational scenes
+ * so that Danbooru anime diffusion models do not render violent, distorted screaming faces during dialogue.
+ */
+export function sanitizeSceneExpressions(prompt: string, tone?: string): string {
+  // If scene is explicitly marked as a crisis (e.g. violent plane crash), allow terrified disaster reactions
+  if (tone === "crisis") {
+    return prompt;
+  }
+
+  return prompt
+    .replace(/\b(shouting|screaming|yelling)\s+(at|towards)\b/gi, "talking to, looking at")
+    .replace(/\bmouth\s+open\s+in\s+a\s+(silent\s+)?(scream|shout|gasp)\b/gi, "parted lips, serious expression")
+    .replace(/\b(shouting|screaming|yelling|screaming\s+furiously)\b/gi, "talking, parted lips")
+    .replace(/\beyes\s+wide\s+with\s+terror\b/gi, "serious focused expression")
+    .replace(/\b(sobbing\s+hysterically|hysterical\s+crying)\b/gi, "worried expression, looking down");
+}
+
+/**
  * Builds the composite Anima prompt for a scene, guaranteeing that the verbatim identity
  * prompts of all present characters (up to 3 max) are included and segmented with exact gender tags.
  */
@@ -253,6 +271,9 @@ export function buildScenePrompt(
     .replace(/^(2people,\s*duo|3people,\s*trio|1person,\s*solo),\s*/i, "")
     .replace(/\bboth\s+wearing\b/gi, "individually wearing");
 
+  // Apply expression sanitizer to prevent unwarranted yelling during discussions
+  composed = sanitizeSceneExpressions(composed, scene.sceneTone);
+
   // If the prompt doesn't already reference the characters' verbatim descriptions, append them
   const missingPrompts = presentChars
     .filter((c) => !composed.includes(c.verbatimIdentityPrompt.slice(0, 25)))
@@ -263,6 +284,11 @@ export function buildScenePrompt(
 
   if (missingPrompts.length > 0) {
     composed = `${composed}, ${missingPrompts.join(", ")}`;
+  }
+
+  // If 2 or more characters are present and no gaze direction is specified, add mutual gaze
+  if (presentChars.length >= 2 && !/\b(looking at each other|facing each other|eye contact)\b/i.test(composed)) {
+    composed = `${composed}, looking at each other`;
   }
 
   return `${charCountTag}, ${composed}`;

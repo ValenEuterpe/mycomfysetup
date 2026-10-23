@@ -32,6 +32,7 @@ import {
 } from "../lib/storage";
 import {
   enhanceCharacterPrompt,
+  enhanceCharacterProfile,
   planVisualNovelScenes,
   loadLlmConfig,
 } from "../lib/llmClient";
@@ -77,6 +78,8 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
   // New Character Creation Form
   const [charName, setCharName] = useState("");
   const [charGender, setCharGender] = useState<"female" | "male">("female");
+  const [charRole, setCharRole] = useState("Civilian Passenger");
+  const [charBaselineOutfit, setCharBaselineOutfit] = useState("");
   const [charPrompt, setCharPrompt] = useState("");
   const [figureStyle, setFigureStyle] = useState("Auto");
   const [faceShape, setFaceShape] = useState("Auto");
@@ -158,11 +161,20 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
     setIsEnhancingPrompt(true);
 
     try {
-      const enhanced = await enhanceCharacterPrompt(charPrompt, charName, {
+      const profile = await enhanceCharacterProfile(charPrompt, charName, {
+        gender: charGender,
         figureStyle: figureStyle !== "Auto" ? figureStyle : undefined,
         faceShape: faceShape !== "Auto" ? faceShape : undefined,
+        role: charRole.trim() || undefined,
+        baselineOutfit: charBaselineOutfit.trim() || undefined,
       });
-      setEnhancedPrompt(enhanced);
+      setEnhancedPrompt(profile.verbatimIdentityPrompt);
+      if (!charBaselineOutfit.trim()) {
+        setCharBaselineOutfit(profile.baselineOutfit);
+      }
+      if (!charRole.trim() || charRole === "Civilian Passenger") {
+        setCharRole(profile.role);
+      }
     } catch (err: any) {
       setCharFormError(
         `AI prompt enhancement failed: ${err.message}. Make sure your LLM endpoint is configured in Settings.`
@@ -225,6 +237,8 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
       id: `char_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       name: charName.trim(),
       gender: charGender,
+      role: charRole.trim() || "Civilian Passenger",
+      baselineOutfit: charBaselineOutfit.trim() || undefined,
       userPrompt: charPrompt.trim(),
       figureStyle: figureStyle !== "Auto" ? figureStyle : undefined,
       faceShape: faceShape !== "Auto" ? faceShape : undefined,
@@ -246,6 +260,8 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
     // Reset Form
     setCharName("");
     setCharGender("female");
+    setCharRole("Civilian Passenger");
+    setCharBaselineOutfit("");
     setCharPrompt("");
     setFigureStyle("Auto");
     setFaceShape("Auto");
@@ -394,9 +410,10 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
       const nextSceneNum = scenes.length + 1;
       const plannedNext = await planVisualNovelScenes(
         activeChars,
-        `Current story context: ${storyPremise}. Continuing with: ${continuePrompt}`,
-        continuePrompt,
-        1
+        `Overall Premise: ${storyPremise}`,
+        `Next Scene Beat: ${continuePrompt}`,
+        1,
+        scenes // Narrative Engine history: preserves clothing states, setting, and dialogue dynamics
       );
 
       if (plannedNext.length > 0) {
@@ -569,6 +586,80 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
                     </button>
                   </div>
                 </div>
+              </div>
+
+              {/* Role & Baseline Attire */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                <div className="sm:col-span-5">
+                  <label className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-1.5">
+                    Role / Archetype
+                  </label>
+                  <input
+                    type="text"
+                    value={charRole}
+                    onChange={(e) => setCharRole(e.target.value)}
+                    placeholder="e.g. Civilian Passenger, Teacher, Doctor"
+                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-fuchsia-500 rounded-xl px-4 py-2 text-xs sm:text-sm text-zinc-100 placeholder:text-zinc-600 transition-colors shadow-inner"
+                  />
+                </div>
+                <div className="sm:col-span-7">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider">
+                      Baseline Starting Attire
+                    </label>
+                    <span className="text-[10px] text-fuchsia-400 font-medium">Persists & Evolved</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={charBaselineOutfit}
+                    onChange={(e) => setCharBaselineOutfit(e.target.value)}
+                    placeholder="e.g. casual grey t-shirt, dark denim jeans, white sneakers"
+                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-fuchsia-500 rounded-xl px-4 py-2 text-xs sm:text-sm text-zinc-100 placeholder:text-zinc-600 transition-colors shadow-inner"
+                  />
+                </div>
+              </div>
+
+              {/* Quick Outfit Presets */}
+              <div className="flex flex-wrap items-center gap-1.5 -mt-2">
+                <span className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider mr-1">
+                  Presets:
+                </span>
+                {[
+                  {
+                    label: "Civilian Casual",
+                    outfit:
+                      charGender === "male"
+                        ? "casual grey crewneck t-shirt, dark denim jeans, white sneakers"
+                        : "casual white linen shirt, dark blue jeans, white sneakers",
+                  },
+                  {
+                    label: "Summer Vacation",
+                    outfit:
+                      charGender === "male"
+                        ? "short-sleeve floral shirt, khaki shorts, boat shoes"
+                        : "light floral sundress, sunhat, leather sandals",
+                  },
+                  {
+                    label: "Office Casual",
+                    outfit:
+                      charGender === "male"
+                        ? "light blue collared shirt, dark grey slacks, leather shoes"
+                        : "silk button-up blouse, tailored trousers, flats",
+                  },
+                  {
+                    label: "Outdoor Adventure",
+                    outfit: "windbreaker jacket, rugged cargo pants, hiking boots",
+                  },
+                ].map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => setCharBaselineOutfit(preset.outfit)}
+                    className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800 transition-colors"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
               </div>
 
               {/* User Character Description */}
@@ -830,6 +921,12 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
+                            {c.baselineOutfit && (
+                              <p className="text-[10px] text-fuchsia-300/90 font-medium truncate mb-0.5">
+                                <span className="text-zinc-500 font-normal">Attire: </span>
+                                {c.baselineOutfit}
+                              </p>
+                            )}
                             <p className="text-[11px] text-zinc-400 line-clamp-2 leading-relaxed">
                               {c.verbatimIdentityPrompt}
                             </p>
@@ -1187,6 +1284,11 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
                   <span className="px-3 py-1 rounded-full bg-black/70 backdrop-blur-md border border-white/10 text-xs font-bold text-white shadow-md">
                     Scene {currentSceneIndex + 1} of {scenes.length}
                   </span>
+                  {currentScene?.sceneTone && (
+                    <span className="hidden sm:inline-block px-2.5 py-0.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-[10px] font-semibold text-fuchsia-300">
+                      {currentScene.sceneTone.replace("_", " ")}
+                    </span>
+                  )}
                   <span className="hidden sm:inline-block text-xs font-medium text-zinc-200 drop-shadow">
                     {currentScene?.title}
                   </span>
@@ -1254,9 +1356,18 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
                         </span>
                       )}
                     </div>
-                    <span className="text-[10px] text-zinc-400">
-                      Line {currentDialogueIndex + 1} of {currentScene?.dialogues?.length || 1}
-                    </span>
+                    <div className="flex items-center gap-2 text-[10px] text-zinc-400">
+                      <span>Line {currentDialogueIndex + 1} of {currentScene?.dialogues?.length || 1}</span>
+                      {currentScene?.characterStates?.find((cs) => cs.name.toLowerCase() === currentDialogue?.speaker?.toLowerCase())?.outfit && (
+                        <>
+                          <span>•</span>
+                          <span className="text-zinc-500 font-normal">wearing</span>
+                          <span className="text-zinc-300 truncate max-w-[180px] sm:max-w-xs">
+                            {currentScene.characterStates.find((cs) => cs.name.toLowerCase() === currentDialogue?.speaker?.toLowerCase())?.outfit}
+                          </span>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
 

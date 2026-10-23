@@ -195,6 +195,15 @@ export async function callLlmChat(
 export interface EnhancePromptOptions {
   figureStyle?: string;
   faceShape?: string;
+  gender?: "male" | "female" | "other";
+  role?: string;
+  baselineOutfit?: string;
+}
+
+export interface EnhancedCharacterProfile {
+  verbatimIdentityPrompt: string;
+  baselineOutfit: string;
+  role: string;
 }
 
 /**
@@ -249,65 +258,114 @@ export function sanitizeCharacterPrompt(raw: string): string {
  * Focuses strictly on bodily proportions, figure silhouette, face shape, eye color, hair,
  * and facial features, while completely excluding style, quality, expression, and clothing tags.
  */
+/**
+ * Improves user's character description into an Anima-optimized physical identity prompt
+ * and establishes a canonical baseline outfit & role.
+ *
+ * Bodily proportions, figure silhouette, and face shape are kept strictly anatomical,
+ * while clothing is isolated into baselineOutfit so it can persist and evolve across scenes.
+ */
+export async function enhanceCharacterProfile(
+  userPrompt: string,
+  characterName: string,
+  options?: EnhancePromptOptions
+): Promise<EnhancedCharacterProfile> {
+  const systemPrompt = `You are an expert anime character designer and costume director for diffusion models (specifically the Anima model).
+Your task is to take the user's character description and generate three distinct outputs:
+
+1. "verbatimIdentityPrompt":
+   An ultra-detailed, Danbooru/tag-informed physical identity prompt focusing EXCLUSIVELY on:
+   - Figure silhouette & body proportions (e.g. "hourglass figure", "curvy figure", "pear-shaped body", "athletic build", "slender build", "chubby / plump body", waist-to-hip ratio, bust size, leg shape).
+   - Facial bone structure (e.g. "sharp angular jawline", "soft rounded jaw", "high cheekbones", "pointed chin", face shape).
+   - Eyes, eyebrows, nose bridge, lips, hair color, hair length, hair style, bangs, complexion.
+   - STRICT PROHIBITIONS FOR verbatimIdentityPrompt:
+     * NO clothing or costume tags (clothes are isolated in baselineOutfit).
+     * NO style or quality tags (e.g. NO "realistic anime style", NO "high quality", NO "detailed character design").
+     * NO static emotional expressions (e.g. NO "simple expression", NO "smiling", NO "frowning").
+
+2. "baselineOutfit":
+   The canonical starting outfit for this character.
+   - If the user explicitly mentions clothing in their description or options (e.g. "wearing green hoodie", "leather jacket", "sundress"), extract and polish that clothing!
+   - If the user did NOT mention clothing, create a stylish, believable civilian passenger/traveler outfit (e.g. for male: "casual grey crewneck t-shirt, dark denim jeans, white sneakers"; for female: "light blue linen button-up blouse, dark navy trousers, comfortable sneakers").
+   - DO NOT assign unprompted uniforms like pilot or flight attendant unless requested!
+
+3. "role":
+   The character's narrative background or profession (e.g. "Civilian Passenger", "High School Teacher", "Software Engineer", or whatever the user described).
+
+Return STRICT JSON:
+{
+  "verbatimIdentityPrompt": "comma-separated physical anime tags",
+  "baselineOutfit": "specific clothing description",
+  "role": "character role / background"
+}`;
+
+  let userMsg = `Character Name: ${characterName || "Character"}
+Gender: ${options?.gender || "unspecified"}
+User's description: ${userPrompt}`;
+
+  if (options?.figureStyle && options.figureStyle !== "Auto") {
+    userMsg += `\nPreferred Figure Silhouette: ${options.figureStyle}`;
+  }
+  if (options?.faceShape && options.faceShape !== "Auto") {
+    userMsg += `\nPreferred Face Shape / Jawline: ${options.faceShape}`;
+  }
+  if (options?.role && options.role.trim()) {
+    userMsg += `\nPreferred Role: ${options.role.trim()}`;
+  }
+  if (options?.baselineOutfit && options.baselineOutfit.trim()) {
+    userMsg += `\nPreferred Baseline Outfit: ${options.baselineOutfit.trim()}`;
+  }
+
+  const responseText = await callLlmChat(
+    [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userMsg },
+    ],
+    { jsonMode: true, temperature: 0.6 }
+  );
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(responseText);
+  } catch {
+    const match = responseText.match(/\{[\s\S]*\}/);
+    if (match) {
+      try {
+        parsed = JSON.parse(match[0]);
+      } catch {
+        parsed = null;
+      }
+    }
+  }
+
+  const rawIdentity = parsed?.verbatimIdentityPrompt || responseText;
+  const cleanedIdentity = sanitizeCharacterPrompt(
+    rawIdentity.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").trim()
+  );
+
+  const fallbackOutfit =
+    options?.gender === "male"
+      ? "casual grey crewneck t-shirt, dark denim jeans, white sneakers"
+      : "casual light blue linen blouse, dark trousers, white sneakers";
+
+  return {
+    verbatimIdentityPrompt: cleanedIdentity,
+    baselineOutfit: parsed?.baselineOutfit?.trim() || options?.baselineOutfit || fallbackOutfit,
+    role: parsed?.role?.trim() || options?.role || "Civilian Passenger",
+  };
+}
+
+/**
+ * Improves user's character description into an Anima-optimized physical identity prompt.
+ * Backwards compatible helper that delegates to enhanceCharacterProfile.
+ */
 export async function enhanceCharacterPrompt(
   userPrompt: string,
   characterName: string,
   options?: EnhancePromptOptions
 ): Promise<string> {
-  const systemPrompt = `You are an expert anime character designer and prompt engineer for diffusion models (specifically the Anima model).
-Your task is to convert the user's character idea into an ultra-detailed, Danbooru/tag-informed character physical identity prompt.
-
-CRITICAL PURPOSE:
-The Anima model will use this EXACT verbatim prompt across many different scenes, environments, poses, and outfits.
-Therefore, YOU MUST FOCUS EXCLUSIVELY ON PHYSICAL BODY PROPORTIONS, FIGURE SILHOUETTE, FACIAL ANATOMY, AND NATURAL FEATURES.
-
-1. FIGURE SILHOUETTE & BODY PROPORTIONS (BE HIGHLY SPECIFIC):
-   - Figure silhouette: choose or match the exact figure type (e.g. "hourglass figure", "curvy figure", "pear-shaped body", "apple-shaped figure", "athletic build", "toned physique", "slender build", "lean frame", "chubby build", "plump body", "heavyset body", "thick build", "stocky build", "petite frame", "tall statuesque build").
-   - Torso & waistline: waist-to-hip ratio (e.g. "narrow waist", "defined waistline", "straight waist", "soft natural waist"), hips ("wide hips", "curved hips", "narrow hips"), abdomen ("flat stomach", "soft belly").
-   - Chest / Bust / Shoulders: chest proportion (e.g. "medium breasts", "large breasts", "ample bust", "small breasts", "flat chest", "broad chest", "muscular pectorals"), shoulder structure ("broad shoulders", "sloping shoulders", "soft shoulders", "narrow shoulders").
-   - Limbs & Stature: leg and arm proportions ("thick thighs", "slender thighs", "soft curved legs", "long legs", "toned arms", "proportional limbs"), height ("tall height", "petite height", "average height").
-
-2. FACIAL PROPORTIONS & BONE STRUCTURE:
-   - Cranial & jaw geometry: face shape ("oval face", "round face", "heart-shaped face", "diamond face"), jawline ("sharp angular jawline", "soft rounded jaw", "defined jaw", "chiseled jaw"), chin ("pointed chin", "rounded chin", "cleft chin"), cheekbones ("high cheekbones", "soft cheeks", "prominent cheekbones").
-   - Facial feature geometry & spacing: eye placement ("almond-shaped eyes", "wide-set eyes", "deep-set eyes", "large expressive eyes"), nose bridge ("straight nose bridge", "button nose", "aquiline nose", "narrow nose tip"), lips ("full lips", "thin lips", "defined cupid's bow", "wide mouth").
-   - Eyes & Eyebrows: exact iris color, pupil style, eyelashes ("long dark eyelashes"), eyebrow shape ("arched eyebrows", "soft straight eyebrows").
-   - Hair: exact color, hairstyle, hair length ("waist-length", "shoulder-length", "short cropped"), bangs type, hair texture.
-   - Complexion & marks: skin tone ("fair porcelain skin", "warm tan skin", "olive skin"), distinct physical marks ("beauty mark under left eye", "faint freckles across nose bridge", "small scar").
-
-3. STRICT PROHIBITIONS:
-   - DO NOT include style or rendering tags (e.g. NO "realistic anime style", NO "high quality", NO "detailed character design", NO "masterpiece", NO "illustration", NO "8k"). Style and quality are handled by the pipeline prefill.
-   - DO NOT include emotional or expression tags (e.g. NO "simple expression", NO "neutral expression", NO "smiling", NO "frowning"). Expressions vary per scene in the visual novel!
-   - DO NOT include clothes, costumes, or job titles (e.g. NO "teacher", NO "suit", NO "uniform", NO "dress"). Clothes are added in story scenes!
-
-4. FORMAT:
-   - Output ONLY the comma-separated descriptive anime tags and phrases.
-   - No explanations, no markdown codeblocks, no extra commentary.`;
-
-  let userMsg = `Character Name: ${characterName || "Character"}
-User's description: ${userPrompt}`;
-
-  if (options?.figureStyle && options.figureStyle !== "Auto") {
-    userMsg += `\nPreferred Figure Silhouette / Body Proportions: ${options.figureStyle}`;
-  }
-  if (options?.faceShape && options.faceShape !== "Auto") {
-    userMsg += `\nPreferred Face Shape / Jawline: ${options.faceShape}`;
-  }
-
-  userMsg += `\n\nGenerate the detailed bodily and facial identity prompt:`;
-
-  const enhanced = await callLlmChat(
-    [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userMsg },
-    ],
-    { temperature: 0.6 }
-  );
-
-  // Clean markdown quotes if any
-  const rawText = enhanced.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").trim();
-
-  // Apply deterministic tag sanitizer
-  return sanitizeCharacterPrompt(rawText);
+  const profile = await enhanceCharacterProfile(userPrompt, characterName, options);
+  return profile.verbatimIdentityPrompt;
 }
 
 /**
@@ -318,7 +376,8 @@ export async function planVisualNovelScenes(
   characters: VNCharacter[],
   storyPremise: string,
   firstSceneOutline: string,
-  sceneCount: number = 4
+  sceneCount: number = 4,
+  previousScenes?: VNScene[]
 ): Promise<VNScene[]> {
   const charactersSummary = characters
     .map(
@@ -326,40 +385,97 @@ export async function planVisualNovelScenes(
         `[Character ${idx + 1}]
 Name: ${c.name}
 Gender: ${c.gender || "unspecified"}
+Role / Archetype: ${c.role || "Civilian Passenger"}
+Baseline Outfit: ${c.baselineOutfit || "casual traveler clothes (t-shirt and denim jeans)"}
 Verbatim Physical Identity: ${c.verbatimIdentityPrompt}`
     )
     .join("\n\n");
 
-  const systemPrompt = `You are a master visual novel director and scenario writer.
+  let continuityBlock = "";
+  if (previousScenes && previousScenes.length > 0) {
+    const lastScene = previousScenes[previousScenes.length - 1];
+    continuityBlock = `\nPREVIOUS STORY CONTEXT & TIMELINE (CRITICAL FOR CONTINUITY):
+- Last Scene (${lastScene.sceneNumber}): "${lastScene.title}"
+- Active Setting / Tone: ${lastScene.sceneTone || "survival_dialogue"}
+- Current Character Outfits / Conditions:
+${
+  lastScene.characterStates && lastScene.characterStates.length > 0
+    ? lastScene.characterStates.map((cs) => `  * ${cs.name}: ${cs.outfit}`).join("\n")
+    : "  * Continuing from previous worn clothes"
+}
+- Recent Dialogues:
+${lastScene.dialogues.map((d) => `  * ${d.speaker}: "${d.text}"`).join("\n")}
+
+CONTINUATION RULES:
+1. USER CLOTHING OVERRIDE (HIGHEST PRIORITY): If the new scene prompt states that characters change clothes, find garments, or take something off, UPDATE their outfit to match!
+2. OUTFIT CONTINUITY (DEFAULT): If no new clothes are mentioned, KEEP the exact clothes and condition from the previous scene! Do NOT reset to clean clothes or switch outfits.
+3. DIALOGUE TONE: Pay close attention to what is being said. If discussing food, survival, or exploring, use normal conversational tags (talking, parted lips, serious expression). NO YELLING.`;
+  }
+
+  const systemPrompt = `You are a master visual novel director, scenario writer, and prompt engineer for diffusion models (Anima).
 You will turn the user's story outline into ${sceneCount} sequential visual novel scenes.
 
-CRITICAL RULES FOR "imagePrompt" (DIFFUSION MODEL PROMPT):
-1. Maximum 3 characters per scene (0, 1, 2, or 3).
-2. NEVER USE COLLECTIVE CLOTHING PHRASES:
-   - FORBIDDEN: "both wearing...", "all wearing...", or identical clothes. Collective clothing causes diffusion models to clone the same character across the scene!
-   - MANDATORY: For EVERY character in the scene, write their clothes SEPARATELY WITH HIGH VISUAL CONTRAST in colors, garment types, and style.
-     Example:
-     - Male character: "wearing a torn white dress shirt unbuttoned at collar, rolled up wet sleeves, ripped dark navy trousers, barefoot"
-     - Female character: "wearing a waterlogged emerald green silk blouse, torn knee-length beige skirt, soaked fabric"
-3. DISTINCT POSES & POSITIONS:
-   - Give each character a distinct non-mirroring pose and placement so they do not duplicate each other.
-   - Example: "Character A is lying on his stomach coughing seawater on the sand, while Character B is sitting on her knees looking back at the smoking airplane wreckage."
-4. STRUCTURE OF "imagePrompt":
-   For every character present, include their gender tag ("1man" or "1woman"), character name, their EXACT verbatim physical identity prompt word-for-word, followed immediately by their specific unique outfit and unique pose:
-   "[Character 1 Name]: 1man, <Character 1 verbatim identity>, wearing <outfit 1>, <pose 1>, and [Character 2 Name]: 1woman, <Character 2 verbatim identity>, wearing <outfit 2>, <pose 2>, <scene environment, background wreckage, lighting, camera angle>"
-5. DIALOGUE & NARRATION:
-   - "title": Short evocative scene title.
-   - "charactersPresent": Array of character names present (max 3).
-   - "narration": 1-2 sentences of narrator description/setting exposition (optional, empty string if none).
-   - "dialogues": Array of { "speaker": string, "text": string, "voiceCue": string } where voiceCue is an expressive acting note (e.g. "shivering in fear", "commanding tone", "soft whisper", "gasping for breath").
+CRITICAL DIRECTIVES FOR THE NARRATIVE ENGINE:
 
-Return STRICT JSON with the schema:
+1. WARDROBE HIERARCHY & CONTINUITY (CRITICAL):
+   - USER-SPECIFIED NEW CLOTHES (HIGHEST PRIORITY):
+     If the user explicitly writes that a character changes clothes, puts on new garments, or takes something off (e.g. "Mike puts on a flannel shirt", "they find a chest with dry clothes", "Anna wears a sundress"), YOU MUST ADOPT THOSE NEW CLOTHES IMMEDIATELY and track them in subsequent scenes!
+   - BASELINE OUTFIT CONTINUITY (DEFAULT):
+     If the user does NOT explicitly write new clothes, each character MUST WEAR THEIR ESTABLISHED BASELINE OUTFIT!
+     Evolve ONLY the physical condition of that outfit to match the story timeline:
+     - Opening scene: intact, normal condition
+     - Crash / ocean impact: soaked, waterlogged, clinging to body
+     - Beach survival: wet, torn, sand-covered, rolled-up trousers/sleeves, barefoot
+     - Later morning: dried, weathered, disheveled
+     STRICT PROHIBITION: NEVER hallucinate pilot uniforms, flight attendant costumes, or random unprompted dresses unless the user explicitly requested them!
+   - CONTRASTING CLOTHES:
+     Never use "both wearing" or identical clothes. Characters must have distinct individual garments and colors.
+
+2. DIALOGUE-DRIVEN EMOTIONAL AWARENESS (NO UNWARRANTED YELLING):
+   - Analyze the emotional subtext and intent of the scene:
+     - Is it a practical survival discussion? Planning? Intimate conversation? Shock?
+   - In diffusion models (Anima/Danbooru), words like "shouting", "screaming", "yelling", "mouth wide open", and "furious" render characters as distorted, aggressive yelling monsters!
+   - STRICT PROHIBITION IN DIALOGUE:
+     NEVER describe characters as "shouting at", "screaming at", "yelling at", or "mouth open in a silent scream" during ordinary discussions or planning (e.g. when Mike says "We need to find food").
+   - MANDATORY ANIME EXPRESSION MAPPING:
+     For each character present in the scene, output clean Danbooru expression tags:
+     - Speaking character: "talking, parted lips, [emotion] expression, looking at [partner]"
+       (e.g. for survival discussion: "talking, parted lips, serious expression, looking at Anna, gesturing while talking")
+       (e.g. for gentle comfort: "talking, gentle smile, looking at Anna, soft gaze")
+     - Listening character: "listening, closed mouth, [reaction] expression, looking at [speaker]"
+       (e.g. for attentive listener: "listening, closed mouth, attentive gaze, slight frown, looking at Mike")
+       (e.g. for relieved listener: "listening, closed mouth, soft smile, looking at Mike")
+     - Genuine screaming / terror tags (e.g. "wide eyes, terrified expression, open mouth") are ONLY allowed in immediate life-or-death physical disasters (such as the aircraft violently slamming into the sea).
+
+3. SCENE TONE:
+   Assign an explicit "sceneTone" for each scene:
+   - "crisis" (violent catastrophe, plane crash, immediate disaster)
+   - "survival_dialogue" (pragmatic planning, discussing food/shelter/water, exploring)
+   - "quiet_moment" (rest, emotional bonding, reflection, sunrise/sunset)
+   - "action" (running, building, struggling against elements)
+   - "discovery" (finding ruins, wreckage, smoke on the horizon)
+
+4. STRUCTURE OF "imagePrompt":
+   For every character present:
+   "[Character 1 Name]: 1man, <Character 1 verbatim identity>, wearing <outfit 1>, <Character 1 expression tags>, <Character 1 distinct pose>; and [Character 2 Name]: 1woman, <Character 2 verbatim identity>, wearing <outfit 2>, <Character 2 expression tags>, <Character 2 distinct pose>; <scene environment, background, lighting, camera angle, looking at each other>"
+
+5. RETURN STRICT JSON with the schema:
 {
   "scenes": [
     {
       "sceneNumber": 1,
       "title": "string",
+      "sceneTone": "crisis | survival_dialogue | quiet_moment | action | discovery",
       "charactersPresent": ["CharacterName"],
+      "characterStates": [
+        {
+          "name": "CharacterName",
+          "outfit": "description of active outfit (e.g. torn white t-shirt, wet jeans)",
+          "emotion": "serious, pragmatic",
+          "expressionTags": "talking, parted lips, serious expression, looking at partner",
+          "pose": "sitting on wet sand, gesturing toward island trees"
+        }
+      ],
       "imagePrompt": "string",
       "narration": "string",
       "dialogues": [
@@ -375,14 +491,15 @@ Return STRICT JSON with the schema:
 
   const userMsg = `AVAILABLE CHARACTERS:
 ${charactersSummary}
+${continuityBlock}
 
 STORY PREMISE (Where the story goes):
 ${storyPremise}
 
-FIRST SCENE OUTLINE (How it begins):
+SCENE OUTLINE (What happens next):
 ${firstSceneOutline}
 
-Generate ${sceneCount} sequential scenes in valid JSON format.`;
+Generate ${sceneCount} sequential scene(s) in valid JSON format following all Narrative Engine directives.`;
 
   const responseText = await callLlmChat(
     [
@@ -414,7 +531,17 @@ Generate ${sceneCount} sequential scenes in valid JSON format.`;
     id: `scene_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 7)}`,
     sceneNumber: s.sceneNumber || idx + 1,
     title: s.title || `Scene ${idx + 1}`,
+    sceneTone: s.sceneTone || "survival_dialogue",
     charactersPresent: Array.isArray(s.charactersPresent) ? s.charactersPresent.slice(0, 3) : [],
+    characterStates: Array.isArray(s.characterStates)
+      ? s.characterStates.map((cs: any) => ({
+          name: cs.name || "",
+          outfit: cs.outfit || "",
+          emotion: cs.emotion || "",
+          expressionTags: cs.expressionTags || "",
+          pose: cs.pose || "",
+        }))
+      : undefined,
     imagePrompt: s.imagePrompt || "",
     narration: s.narration || undefined,
     dialogues: Array.isArray(s.dialogues)

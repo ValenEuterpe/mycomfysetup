@@ -39,6 +39,8 @@ export const StoryLedger: React.FC<StoryLedgerProps> = ({
     characters: characters.map((c) => ({
       name: c.name,
       gender: c.gender || "female",
+      role: c.role || "Civilian Passenger",
+      baselineOutfit: c.baselineOutfit || "casual traveler clothes",
       figureStyle: c.figureStyle || "Auto",
       faceShape: c.faceShape || "Auto",
       verbatimIdentityPrompt: c.verbatimIdentityPrompt,
@@ -46,7 +48,9 @@ export const StoryLedger: React.FC<StoryLedgerProps> = ({
     scenes: scenes.map((s) => ({
       sceneNumber: s.sceneNumber,
       title: s.title,
+      sceneTone: s.sceneTone || "survival_dialogue",
       charactersPresent: s.charactersPresent,
+      characterStates: s.characterStates || null,
       fullImagePrompt: buildScenePrompt(s, characters),
       narration: s.narration || null,
       dialogues: s.dialogues.map((d) => ({
@@ -183,18 +187,25 @@ export const StoryLedger: React.FC<StoryLedgerProps> = ({
               {characters.map((c) => (
                 <div
                   key={c.id}
-                  className="p-3 rounded-xl bg-zinc-950/50 border border-zinc-800 text-xs flex flex-col gap-1"
+                  className="p-3 rounded-xl bg-zinc-950/50 border border-zinc-800 text-xs flex flex-col gap-1.5"
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-white flex items-center gap-1.5">
                       <User className="w-3.5 h-3.5 text-fuchsia-400" />
                       {c.name}
+                      <span className="text-[10px] font-normal text-zinc-400">({c.role || "Civilian Passenger"})</span>
                     </span>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300">
                       {c.gender === "male" ? "♂ Male" : "♀ Female"}
                     </span>
                   </div>
-                  <p className="text-[11px] text-zinc-400 font-mono line-clamp-3 leading-relaxed">
+                  {c.baselineOutfit && (
+                    <div className="text-[11px] text-fuchsia-300/90 font-medium">
+                      <span className="text-zinc-500 font-normal">Baseline Attire: </span>
+                      {c.baselineOutfit}
+                    </div>
+                  )}
+                  <p className="text-[11px] text-zinc-400 font-mono line-clamp-2 leading-relaxed">
                     {c.verbatimIdentityPrompt}
                   </p>
                 </div>
@@ -251,14 +262,39 @@ export const StoryLedger: React.FC<StoryLedgerProps> = ({
                     {/* Scene Details */}
                     <div className="flex-1 min-w-0 flex flex-col gap-3 justify-between">
                       <div>
-                        <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <h4 className="text-sm font-bold text-white">
-                            Scene {scene.sceneNumber}: {scene.title}
-                          </h4>
+                        <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-bold text-white">
+                              Scene {scene.sceneNumber}: {scene.title}
+                            </h4>
+                            {scene.sceneTone && (
+                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                                {scene.sceneTone.replace("_", " ")}
+                              </span>
+                            )}
+                          </div>
                           <span className="text-[11px] text-zinc-400 bg-zinc-800/80 px-2 py-0.5 rounded-md">
                             Cast: {scene.charactersPresent.join(", ") || "None"}
                           </span>
                         </div>
+
+                        {/* Active Character States (Wardrobe & Expressions) */}
+                        {scene.characterStates && scene.characterStates.length > 0 && (
+                          <div className="bg-zinc-950/60 rounded-xl p-2.5 mb-2 border border-zinc-800/60 flex flex-col gap-1 text-[11px]">
+                            <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
+                              Narrative State (Wardrobe Evolution & Expressions):
+                            </span>
+                            {scene.characterStates.map((cs) => (
+                              <div key={cs.name} className="flex flex-wrap items-center gap-1.5 text-zinc-300">
+                                <span className="font-bold text-fuchsia-300">{cs.name}:</span>
+                                <span className="text-zinc-400">outfit:</span>
+                                <span className="text-zinc-200 font-medium">{cs.outfit}</span>
+                                <span className="text-zinc-600">•</span>
+                                <span className="text-zinc-400 italic">[{cs.expressionTags || cs.emotion}]</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
 
                         {/* Narration */}
                         {scene.narration && (
