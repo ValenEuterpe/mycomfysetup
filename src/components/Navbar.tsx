@@ -15,6 +15,7 @@ import {
   Layers,
   BookOpen,
   FileText,
+  Shirt,
 } from "lucide-react";
 import { ComfyConnectionTestResult } from "../lib/comfyClient";
 import { VNTab } from "../types/visualNovel";
@@ -34,6 +35,7 @@ interface NavbarProps {
   onVnTabChange?: (tab: VNTab) => void;
   vnCharacterCount?: number;
   vnSceneCount?: number;
+  vnAttireCount?: number;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -49,6 +51,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onVnTabChange,
   vnCharacterCount,
   vnSceneCount,
+  vnAttireCount,
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -135,7 +138,19 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }`}
               >
                 <UserPlus className="w-3.5 h-3.5" />
-                <span>1. Characters{vnCharacterCount !== undefined ? ` (${vnCharacterCount})` : ""}</span>
+                <span>1. Cast{vnCharacterCount !== undefined ? ` (${vnCharacterCount})` : ""}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onVnTabChange("wardrobe")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  vnTab === "wardrobe"
+                    ? "bg-fuchsia-600 text-white shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-100"
+                }`}
+              >
+                <Shirt className="w-3.5 h-3.5" />
+                <span>2. Wardrobe{vnAttireCount !== undefined ? ` (${vnAttireCount})` : ""}</span>
               </button>
               <button
                 type="button"
@@ -147,7 +162,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }`}
               >
                 <Layers className="w-3.5 h-3.5" />
-                <span>2. Story</span>
+                <span>3. Story</span>
               </button>
               <button
                 type="button"
@@ -160,7 +175,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }`}
               >
                 <BookOpen className="w-3.5 h-3.5" />
-                <span>3. Play Novel{vnSceneCount ? ` (${vnSceneCount})` : ""}</span>
+                <span>4. Play Novel{vnSceneCount ? ` (${vnSceneCount})` : ""}</span>
               </button>
               <button
                 type="button"
@@ -172,7 +187,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }`}
               >
                 <FileText className="w-3.5 h-3.5" />
-                <span>4. Ledger</span>
+                <span>5. Ledger</span>
               </button>
             </div>
           )}
@@ -337,7 +352,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             type="button"
             onClick={() => onVnTabChange("characters")}
-            className={`flex-1 min-w-[70px] py-1.5 px-2 rounded-lg text-[11px] font-semibold text-center transition-colors truncate ${
+            className={`flex-1 min-w-[60px] py-1.5 px-1.5 rounded-lg text-[11px] font-semibold text-center transition-colors truncate ${
               vnTab === "characters"
                 ? "bg-fuchsia-600 text-white shadow-sm"
                 : "text-zinc-400 bg-zinc-900/60"
@@ -347,37 +362,48 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
           <button
             type="button"
+            onClick={() => onVnTabChange("wardrobe")}
+            className={`flex-1 min-w-[65px] py-1.5 px-1.5 rounded-lg text-[11px] font-semibold text-center transition-colors truncate ${
+              vnTab === "wardrobe"
+                ? "bg-fuchsia-600 text-white shadow-sm"
+                : "text-zinc-400 bg-zinc-900/60"
+            }`}
+          >
+            2. Clothes{vnAttireCount !== undefined ? ` (${vnAttireCount})` : ""}
+          </button>
+          <button
+            type="button"
             onClick={() => onVnTabChange("story")}
-            className={`flex-1 min-w-[65px] py-1.5 px-2 rounded-lg text-[11px] font-semibold text-center transition-colors truncate ${
+            className={`flex-1 min-w-[55px] py-1.5 px-1.5 rounded-lg text-[11px] font-semibold text-center transition-colors truncate ${
               vnTab === "story"
                 ? "bg-fuchsia-600 text-white shadow-sm"
                 : "text-zinc-400 bg-zinc-900/60"
             }`}
           >
-            2. Story
+            3. Story
           </button>
           <button
             type="button"
             onClick={() => onVnTabChange("reader")}
             disabled={!vnSceneCount}
-            className={`flex-1 min-w-[70px] py-1.5 px-2 rounded-lg text-[11px] font-semibold text-center transition-colors truncate disabled:opacity-40 ${
+            className={`flex-1 min-w-[55px] py-1.5 px-1.5 rounded-lg text-[11px] font-semibold text-center transition-colors truncate disabled:opacity-40 ${
               vnTab === "reader"
                 ? "bg-fuchsia-600 text-white shadow-sm"
                 : "text-zinc-400 bg-zinc-900/60"
             }`}
           >
-            3. Play{vnSceneCount ? ` (${vnSceneCount})` : ""}
+            4. Play{vnSceneCount ? ` (${vnSceneCount})` : ""}
           </button>
           <button
             type="button"
             onClick={() => onVnTabChange("ledger")}
-            className={`flex-1 min-w-[65px] py-1.5 px-2 rounded-lg text-[11px] font-semibold text-center transition-colors truncate ${
+            className={`flex-1 min-w-[55px] py-1.5 px-1.5 rounded-lg text-[11px] font-semibold text-center transition-colors truncate ${
               vnTab === "ledger"
                 ? "bg-fuchsia-600 text-white shadow-sm"
                 : "text-zinc-400 bg-zinc-900/60"
             }`}
           >
-            4. Ledger
+            5. Log
           </button>
         </div>
       )}

@@ -97,6 +97,7 @@ export const App: React.FC = () => {
   // Visual Novel Navigation State
   const [vnTab, setVnTab] = useState<VNTab>("characters");
   const [vnCharCount, setVnCharCount] = useState<number>(0);
+  const [vnAttireCount, setVnAttireCount] = useState<number>(0);
   const [vnSceneCount, setVnSceneCount] = useState<number>(0);
 
   // 5. Hash routing between Generate, Identity Edit, and Visual Novel pages
@@ -472,6 +473,7 @@ export const App: React.FC = () => {
         vnTab={vnTab}
         onVnTabChange={setVnTab}
         vnCharacterCount={vnCharCount}
+        vnAttireCount={vnAttireCount}
         vnSceneCount={vnSceneCount}
       />
 
@@ -489,9 +491,10 @@ export const App: React.FC = () => {
           onOpenSettings={() => setShowSettingsModal(true)}
           activeTab={vnTab}
           onTabChange={setVnTab}
-          onCountsChange={(chars, scenes) => {
+          onCountsChange={(chars, scenes, attires) => {
             setVnCharCount(chars);
             setVnSceneCount(scenes);
+            if (attires !== undefined) setVnAttireCount(attires);
           }}
         />
       ) : (

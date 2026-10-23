@@ -1,5 +1,5 @@
 import { GenerationHistoryItem } from "../types/workflow";
-import { VNCharacter, VNStory } from "../types/visualNovel";
+import { VNCharacter, VNStory, VNAttire } from "../types/visualNovel";
 
 const STORAGE_KEYS = {
   ENDPOINT: "comfy_studio_endpoint",
@@ -10,6 +10,7 @@ const STORAGE_KEYS = {
   DELIVERY_PREFS: "comfy_studio_delivery_prefs",
   VN_CHARACTERS: "comfy_studio_vn_characters",
   VN_STORIES: "comfy_studio_vn_stories",
+  VN_ATTIRES: "comfy_studio_vn_attires",
 };
 
 export const DEFAULT_ENDPOINT =
@@ -236,6 +237,180 @@ export function deleteVNStory(id: string): void {
     const current = loadVNStories();
     const updated = current.filter((s) => s.id !== id);
     localStorage.setItem(STORAGE_KEYS.VN_STORIES, JSON.stringify(updated));
+  } catch {}
+}
+
+export const DEFAULT_BASELINE_ATTIRES: VNAttire[] = [
+  {
+    id: "preset_casual_male",
+    name: "Civilian Flight Casual (Male)",
+    gender: "male",
+    category: "travel",
+    verbatimPrompt: "crisp grey crewneck t-shirt, dark indigo denim jeans, white canvas sneakers, brown leather watch",
+    userDescription: "Standard comfortable traveler clothing for men",
+    isPreset: true,
+    createdAt: 1700000000000,
+  },
+  {
+    id: "preset_casual_female",
+    name: "Civilian Flight Casual (Female)",
+    gender: "female",
+    category: "travel",
+    verbatimPrompt: "light blue linen button-up blouse, dark navy tailored trousers, comfortable white slip-on sneakers",
+    userDescription: "Smart casual traveler attire for women",
+    isPreset: true,
+    createdAt: 1700000000001,
+  },
+  {
+    id: "preset_summer_male",
+    name: "Summer Vacationer (Male)",
+    gender: "male",
+    category: "casual",
+    verbatimPrompt: "short-sleeve tropical floral shirt, khaki chino shorts, brown leather boat shoes, woven wristband",
+    userDescription: "Relaxed tropical vacation outfit",
+    isPreset: true,
+    createdAt: 1700000000002,
+  },
+  {
+    id: "preset_summer_female",
+    name: "Summer Vacationer (Female)",
+    gender: "female",
+    category: "casual",
+    verbatimPrompt: "lightweight yellow floral sundress with thin straps, straw sunhat, tan leather sandals",
+    userDescription: "Breezy sunny day sundress",
+    isPreset: true,
+    createdAt: 1700000000003,
+  },
+  {
+    id: "preset_office_male",
+    name: "Office Executive (Male)",
+    gender: "male",
+    category: "formal",
+    verbatimPrompt: "crisp light blue dress shirt, dark charcoal wool slacks, black leather dress belt, polished oxford shoes",
+    userDescription: "Professional business wear for men",
+    isPreset: true,
+    createdAt: 1700000000004,
+  },
+  {
+    id: "preset_office_female",
+    name: "Office Professional (Female)",
+    gender: "female",
+    category: "formal",
+    verbatimPrompt: "silk emerald green button-up blouse, high-waisted beige pencil skirt, black low-heel pumps",
+    userDescription: "Tailored professional attire for women",
+    isPreset: true,
+    createdAt: 1700000000005,
+  },
+  {
+    id: "preset_explorer_unisex",
+    name: "Island Explorer (Unisex)",
+    gender: "unisex",
+    category: "adventure",
+    verbatimPrompt: "olive green zippered utility windbreaker, rugged dark cargo pants with pockets, durable waterproof hiking boots",
+    userDescription: "Durable survival and outdoor exploration gear",
+    isPreset: true,
+    createdAt: 1700000000006,
+  },
+  {
+    id: "preset_pilot_male",
+    name: "Airline Captain Uniform (Male)",
+    gender: "male",
+    category: "uniform",
+    verbatimPrompt: "crisp white short-sleeve pilot shirt with gold four-stripe epaulets, dark navy formal flight trousers, black leather dress shoes",
+    userDescription: "Commercial aviation captain uniform",
+    isPreset: true,
+    createdAt: 1700000000007,
+  },
+  {
+    id: "preset_attendant_female",
+    name: "Flight Attendant Uniform (Female)",
+    gender: "female",
+    category: "uniform",
+    verbatimPrompt: "tailored royal blue flight attendant uniform dress with white lapel collar, red silk neckerchief, black leather pumps",
+    userDescription: "Classic commercial airline crew uniform",
+    isPreset: true,
+    createdAt: 1700000000008,
+  },
+  {
+    id: "preset_athletic_unisex",
+    name: "Athletic Sportswear (Unisex)",
+    gender: "unisex",
+    category: "casual",
+    verbatimPrompt: "breathable black dry-fit athletic hoodie, grey tapered sweatpants, modern running sneakers",
+    userDescription: "Modern activewear and sportswear",
+    isPreset: true,
+    createdAt: 1700000000009,
+  },
+];
+
+export function loadVNAttires(): VNAttire[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.VN_ATTIRES);
+    const custom: VNAttire[] = raw ? JSON.parse(raw) : [];
+    const map = new Map<string, VNAttire>();
+    DEFAULT_BASELINE_ATTIRES.forEach((a) => map.set(a.id, a));
+    custom.forEach((a) => map.set(a.id, a));
+    return Array.from(map.values());
+  } catch {
+    return DEFAULT_BASELINE_ATTIRES;
+  }
+}
+
+export async function fetchAttiresFromKV(): Promise<VNAttire[]> {
+  try {
+    const res = await fetch("/api/attires");
+    if (!res.ok) return loadVNAttires();
+    const data = await res.json();
+    if (Array.isArray(data?.attires) && data.attires.length > 0) {
+      const current = loadVNAttires();
+      const map = new Map<string, VNAttire>();
+      current.forEach((a) => map.set(a.id, a));
+      data.attires.forEach((a: VNAttire) => map.set(a.id, a));
+      const merged = Array.from(map.values());
+      const customOnly = merged.filter((a) => !a.isPreset);
+      localStorage.setItem(STORAGE_KEYS.VN_ATTIRES, JSON.stringify(customOnly));
+      return merged;
+    }
+    return loadVNAttires();
+  } catch {
+    return loadVNAttires();
+  }
+}
+
+export function saveVNAttire(attire: VNAttire): void {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.VN_ATTIRES);
+    const custom: VNAttire[] = raw ? JSON.parse(raw) : [];
+    const existingIndex = custom.findIndex((a) => a.id === attire.id);
+    let updated: VNAttire[];
+    if (existingIndex >= 0) {
+      updated = [...custom];
+      updated[existingIndex] = attire;
+    } else {
+      updated = [attire, ...custom];
+    }
+    localStorage.setItem(STORAGE_KEYS.VN_ATTIRES, JSON.stringify(updated));
+
+    // Background sync to Cloudflare KV
+    fetch("/api/attires", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ attire }),
+    }).catch(() => {});
+  } catch {}
+}
+
+export function deleteVNAttire(id: string): void {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.VN_ATTIRES);
+    const custom: VNAttire[] = raw ? JSON.parse(raw) : [];
+    const updated = custom.filter((a) => a.id !== id);
+    localStorage.setItem(STORAGE_KEYS.VN_ATTIRES, JSON.stringify(updated));
+
+    // Background delete from Cloudflare KV
+    fetch(`/api/attires?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }).catch(() => {});
   } catch {}
 }
 

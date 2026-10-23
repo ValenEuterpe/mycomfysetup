@@ -369,6 +369,65 @@ export async function enhanceCharacterPrompt(
 }
 
 /**
+ * Improves user's clothing description into a Danbooru-tailored, garment-specific attire prompt.
+ * Focuses on garments, cut, fabrics, colors, footwear, and accessories, while strictly excluding human anatomy.
+ */
+export async function enhanceAttirePrompt(
+  userPrompt: string,
+  attireName?: string,
+  options?: { gender?: "male" | "female" | "unisex"; category?: string }
+): Promise<string> {
+  const systemPrompt = `You are an expert anime costume designer and prompt engineer for diffusion models (specifically the Anima model).
+Your task is to convert the user's clothing/attire idea into a detailed, Danbooru/tag-informed clothing prompt.
+
+CRITICAL PURPOSE:
+This prompt will be used:
+1. To render the clothing standalone on a white headless mannequin or clothing display stand (no humans).
+2. To be injected into visual novel scene prompts when characters wear this outfit.
+
+STRICT RULES:
+1. FOCUS EXCLUSIVELY ON CLOTHING, GARMENTS, ACCESSORIES, FOOTWEAR, AND MATERIALS:
+   - Upper wear: garment type (e.g. t-shirt, collared dress shirt, hoodie, blouse, coat, jacket), collar style, sleeve length, buttons, patterns.
+   - Lower wear: pants, jeans, shorts, skirt, trousers, fit (e.g. slim-fit, cargo, pleated), belt.
+   - Footwear: sneakers, boots, sandals, loafers, dress shoes, socks.
+   - Colors & fabrics: specific shades (e.g. crimson, navy blue, beige, charcoal, olive green) and textures (e.g. denim, linen, leather, silk, velvet).
+   - Accessories: wristwatch, neckerchief, belt, tie, hat (optional).
+2. STRICT PROHIBITIONS:
+   - DO NOT include human body, anatomy, face, eyes, hair, or skin descriptions (e.g. NO "tall girl", NO "blue eyes", NO "blonde hair", NO "slender body").
+   - DO NOT include quality or meta rendering tags (e.g. NO "masterpiece", NO "realistic anime style", NO "high quality").
+   - DO NOT include static expressions or character emotions.
+
+FORMAT:
+Output ONLY the comma-separated descriptive clothing tags and phrases.
+No explanations, no markdown codeblocks, no extra commentary.`;
+
+  let userMsg = `Attire Name: ${attireName || "Custom Attire"}
+Category: ${options?.category || "casual"}
+Gender: ${options?.gender || "unisex"}
+User's clothing description: ${userPrompt}
+
+Generate the detailed clothing prompt:`;
+
+  const responseText = await callLlmChat(
+    [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userMsg },
+    ],
+    { temperature: 0.6 }
+  );
+
+  const cleaned = responseText
+    .replace(/^```[a-z]*\n?/i, "")
+    .replace(/\n?```$/i, "")
+    .replace(/\b(realistic\s+)?anime\s+style\b/gi, "")
+    .replace(/\b(high|best)\s+quality\b/gi, "")
+    .replace(/\bmasterpiece\b/gi, "")
+    .trim();
+
+  return cleaned;
+}
+
+/**
  * Breaks down the user's story premise & first scene into sequential visual novel scenes.
  * Ensures up to 3 characters per scene and injects each character's verbatim identity prompt.
  */

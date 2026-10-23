@@ -19,9 +19,11 @@ import {
   Info,
   Cloud,
   FileText,
+  Shirt,
 } from "lucide-react";
-import { VNCharacter, VNScene, VNStory, VNTab } from "../types/visualNovel";
+import { VNCharacter, VNScene, VNStory, VNTab, VNAttire } from "../types/visualNovel";
 import { StoryLedger } from "../components/novel/StoryLedger";
+import { AttireStudio } from "../components/novel/AttireStudio";
 import {
   loadVNCharacters,
   saveVNCharacter,
@@ -29,15 +31,21 @@ import {
   fetchCharactersFromKV,
   loadVNStories,
   saveVNStory,
+  loadVNAttires,
+  saveVNAttire,
+  deleteVNAttire,
+  fetchAttiresFromKV,
 } from "../lib/storage";
 import {
   enhanceCharacterPrompt,
   enhanceCharacterProfile,
+  enhanceAttirePrompt,
   planVisualNovelScenes,
   loadLlmConfig,
 } from "../lib/llmClient";
 import {
   generateCharacterPortrait,
+  generateAttirePreview,
   executeAnimaGeneration,
   buildScenePrompt,
 } from "../lib/visualNovelEngine";
@@ -48,7 +56,7 @@ interface VisualNovelPageProps {
   onOpenSettings: () => void;
   activeTab?: VNTab;
   onTabChange?: (tab: VNTab) => void;
-  onCountsChange?: (characterCount: number, sceneCount: number) => void;
+  onCountsChange?: (characterCount: number, sceneCount: number, attireCount?: number) => void;
 }
 
 export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
@@ -80,6 +88,8 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
   const [charGender, setCharGender] = useState<"female" | "male">("female");
   const [charRole, setCharRole] = useState("Civilian Passenger");
   const [charBaselineOutfit, setCharBaselineOutfit] = useState("");
+  const [charBaselineAttireId, setCharBaselineAttireId] = useState<string | undefined>(undefined);
+  const [isWardrobeModalOpen, setIsWardrobeModalOpen] = useState(false);
   const [charPrompt, setCharPrompt] = useState("");
   const [figureStyle, setFigureStyle] = useState("Auto");
   const [faceShape, setFaceShape] = useState("Auto");
@@ -90,6 +100,9 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
   const [portraitStatus, setPortraitStatus] = useState("");
   const [charFormError, setCharFormError] = useState<string | null>(null);
   const [isCloudSynced, setIsCloudSynced] = useState<boolean>(false);
+
+  // Attire Studio State
+  const [attires, setAttires] = useState<VNAttire[]>(loadVNAttires);
 
   // Story & Generation State
   const [storyPremise, setStoryPremise] = useState(
@@ -114,7 +127,7 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
   const [continuePrompt, setContinuePrompt] = useState("");
   const [isContinuing, setIsContinuing] = useState(false);
 
-  // Refresh characters from storage & sync with Cloudflare KV memory on mount
+  // Refresh characters & attires from storage & sync with Cloudflare KV memory on mount
   useEffect(() => {
     // 1. Initial load from browser local storage
     const chars = loadVNCharacters();
@@ -130,12 +143,42 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
         setIsCloudSynced(true);
       }
     });
+
+    // 3. Fetch attires from Cloudflare KV memory
+    fetchAttiresFromKV().then((kvAttires) => {
+      if (kvAttires && kvAttires.length > 0) {
+        setAttires(kvAttires);
+      }
+    });
   }, []);
 
   // Keep parent counts updated for top navigation badges
   useEffect(() => {
-    onCountsChange?.(characters.length, scenes.length);
-  }, [characters.length, scenes.length, onCountsChange]);
+    onCountsChange?.(characters.length, scenes.length, attires.length);
+  }, [characters.length, scenes.length, attires.length, onCountsChange]);
+
+  // Attire Actions
+  const handleSaveAttire = (attire: VNAttire) => {
+    saveVNAttire(attire);
+    setAttires(loadVNAttires());
+  };
+
+  const handleDeleteAttire = (id: string) => {
+    deleteVNAttire(id);
+    setAttires(loadVNAttires());
+  };
+
+  const handleAssignAttireToCharacter = (charId: string, attire: VNAttire) => {
+    const char = characters.find((c) => c.id === charId);
+    if (!char) return;
+    const updatedChar: VNCharacter = {
+      ...char,
+      baselineOutfit: attire.verbatimPrompt,
+      baselineAttireId: attire.id,
+    };
+    saveVNCharacter(updatedChar);
+    setCharacters(loadVNCharacters());
+  };
 
   // Character selection toggle (Max 3 characters)
   const toggleCharSelection = (id: string) => {
@@ -239,6 +282,7 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
       gender: charGender,
       role: charRole.trim() || "Civilian Passenger",
       baselineOutfit: charBaselineOutfit.trim() || undefined,
+      baselineAttireId: charBaselineAttireId,
       userPrompt: charPrompt.trim(),
       figureStyle: figureStyle !== "Auto" ? figureStyle : undefined,
       faceShape: faceShape !== "Auto" ? faceShape : undefined,
@@ -262,6 +306,7 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
     setCharGender("female");
     setCharRole("Civilian Passenger");
     setCharBaselineOutfit("");
+    setCharBaselineAttireId(undefined);
     setCharPrompt("");
     setFigureStyle("Auto");
     setFaceShape("Auto");
@@ -607,12 +652,22 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
                     <label className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider">
                       Baseline Starting Attire
                     </label>
-                    <span className="text-[10px] text-fuchsia-400 font-medium">Persists & Evolved</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsWardrobeModalOpen(true)}
+                      className="text-[10px] text-fuchsia-400 hover:text-fuchsia-300 font-semibold flex items-center gap-1 underline underline-offset-2"
+                    >
+                      <Shirt className="w-3 h-3" />
+                      Browse Wardrobe ({attires.length})
+                    </button>
                   </div>
                   <input
                     type="text"
                     value={charBaselineOutfit}
-                    onChange={(e) => setCharBaselineOutfit(e.target.value)}
+                    onChange={(e) => {
+                      setCharBaselineOutfit(e.target.value);
+                      setCharBaselineAttireId(undefined);
+                    }}
                     placeholder="e.g. casual grey t-shirt, dark denim jeans, white sneakers"
                     className="w-full bg-zinc-950 border border-zinc-800 focus:border-fuchsia-500 rounded-xl px-4 py-2 text-xs sm:text-sm text-zinc-100 placeholder:text-zinc-600 transition-colors shadow-inner"
                   />
@@ -951,18 +1006,42 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
                 )}
 
                 {characters.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("story")}
-                    className="w-full mt-2 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 hover:text-white transition-colors"
-                  >
-                    <span>Proceed to Story Setup ({selectedCharIds.length} selected)</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
+                  <div className="flex flex-col sm:flex-row gap-2 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("wardrobe")}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-xs font-semibold text-zinc-300 hover:text-white transition-colors"
+                    >
+                      <Shirt className="w-3.5 h-3.5 text-fuchsia-400" />
+                      <span>Wardrobe Studio ({attires.length})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("story")}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-500 text-xs font-semibold text-white transition-colors shadow-sm"
+                    >
+                      <span>Proceed to Story Setup ({selectedCharIds.length} selected)</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
           </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 2: WARDROBE & ATTIRE STUDIO (Lookbook & Mannequin References) */}
+        {/* ========================================================================= */}
+        {activeTab === "wardrobe" && (
+          <AttireStudio
+            attires={attires}
+            onSaveAttire={handleSaveAttire}
+            onDeleteAttire={handleDeleteAttire}
+            characters={characters}
+            onAssignToCharacter={handleAssignAttireToCharacter}
+            endpoint={endpoint}
+          />
         )}
 
         {/* ========================================================================= */}
@@ -1468,7 +1547,7 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 4: STORY LEDGER (Comprehensive AI Output & Analysis) */}
+        {/* TAB 5: STORY LEDGER (Comprehensive AI Output & Analysis) */}
         {/* ========================================================================= */}
         {activeTab === "ledger" && (
           <div className="max-w-5xl mx-auto w-full">
@@ -1481,6 +1560,96 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
           </div>
         )}
       </div>
+
+      {/* Wardrobe Quick Picker Modal */}
+      {isWardrobeModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-2xl w-full p-5 shadow-2xl flex flex-col gap-4 max-h-[85vh]">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Shirt className="w-4 h-4 text-fuchsia-400" />
+                  Select Attire from Wardrobe Catalog
+                </h3>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Pick a baseline outfit rendered on a reference mannequin.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsWardrobeModalOpen(false)}
+                className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 overflow-y-auto pr-1">
+              {attires.map((attire) => (
+                <button
+                  key={attire.id}
+                  type="button"
+                  onClick={() => {
+                    setCharBaselineOutfit(attire.verbatimPrompt);
+                    setCharBaselineAttireId(attire.id);
+                    setIsWardrobeModalOpen(false);
+                  }}
+                  className={`p-3 rounded-xl border text-left transition-all flex gap-3 items-center group ${
+                    charBaselineOutfit === attire.verbatimPrompt
+                      ? "bg-fuchsia-950/30 border-fuchsia-500/60"
+                      : "bg-zinc-950 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900/60"
+                  }`}
+                >
+                  <div className="w-14 h-18 rounded-lg bg-zinc-900 border border-zinc-800 overflow-hidden shrink-0 flex items-center justify-center">
+                    {attire.previewImageUrl ? (
+                      <img
+                        src={attire.previewImageUrl}
+                        alt={attire.name}
+                        className="w-full h-full object-contain p-1"
+                      />
+                    ) : (
+                      <Shirt className="w-5 h-5 text-zinc-600" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-1 mb-0.5">
+                      <h4 className="text-xs font-bold text-white group-hover:text-fuchsia-300 truncate">
+                        {attire.name}
+                      </h4>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 capitalize">
+                        {attire.gender}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-zinc-400 line-clamp-2 leading-relaxed">
+                      {attire.verbatimPrompt}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-zinc-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsWardrobeModalOpen(false);
+                  setActiveTab("wardrobe");
+                }}
+                className="text-xs text-fuchsia-400 hover:text-fuchsia-300 underline underline-offset-4"
+              >
+                Go to Full Wardrobe Studio &rarr;
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsWardrobeModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-300 hover:text-white transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

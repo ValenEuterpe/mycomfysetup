@@ -26,6 +26,7 @@ export const onRequest = async (context: {
     "/api/discord",
     "/api/proxy",
     "/api/characters",
+    "/api/attires",
     "/v1",
     "/aspectratio.jpg",
     "/novel",

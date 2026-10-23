@@ -1,9 +1,24 @@
+export interface VNAttire {
+  id: string;
+  name: string;
+  gender: "female" | "male" | "unisex";
+  category: "casual" | "formal" | "travel" | "swimwear" | "uniform" | "adventure" | "other";
+  /** Exact verbatim prompt describing garments, materials, colors, and footwear */
+  verbatimPrompt: string;
+  userDescription?: string;
+  previewImageUrl?: string;
+  mediaId?: string;
+  isPreset?: boolean;
+  createdAt: number;
+}
+
 export interface VNCharacter {
   id: string;
   name: string;
   gender?: "male" | "female" | "other";
   role?: string; // e.g. "Civilian Passenger", "Teacher", "Doctor", "Pilot"
   baselineOutfit?: string; // e.g. "casual grey t-shirt, dark denim jeans, white sneakers"
+  baselineAttireId?: string; // Link to canonical VNAttire
   userPrompt: string;
   figureStyle?: string;
   faceShape?: string;
@@ -59,7 +74,7 @@ export interface VNStory {
   updatedAt: number;
 }
 
-export type VNTab = "characters" | "story" | "reader" | "ledger";
+export type VNTab = "characters" | "wardrobe" | "story" | "reader" | "ledger";
 
 export interface LlmConfig {
   baseUrl: string;

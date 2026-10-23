@@ -192,6 +192,26 @@ export async function generateCharacterPortrait(
 }
 
 /**
+ * Generates an Anima lookbook reference photo of an outfit on a white headless mannequin or clothing display stand (no humans).
+ */
+export async function generateAttirePreview(
+  endpoint: string,
+  attire: { verbatimPrompt: string; name?: string },
+  onProgress?: (percent: number, statusText: string) => void
+): Promise<GeneratedMedia> {
+  const positivePrompt = `no humans, clothes on display, white mannequin, headless mannequin, ghost mannequin, clothes on hanger, clothing display, ${attire.verbatimPrompt}, simple clean neutral background, studio product shot, full outfit display, high detail, sharp focus`;
+  const negativePrompt = `human, face, head, woman, man, girl, boy, eyes, skin, hair, realistic person, lowres, blurry, distorted, anime girl, anime boy`;
+
+  return executeAnimaGeneration(endpoint, {
+    positivePrompt,
+    negativePrompt,
+    width: 832,
+    height: 1216, // Portrait format for full outfit display
+    onProgress,
+  });
+}
+
+/**
  * Detects whether a character is male or female based on explicit gender tag or prompt keywords.
  */
 export function detectCharacterGender(c: VNCharacter): "male" | "female" {
