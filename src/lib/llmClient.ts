@@ -192,40 +192,122 @@ export async function callLlmChat(
   return text.trim();
 }
 
+export interface EnhancePromptOptions {
+  figureStyle?: string;
+  faceShape?: string;
+}
+
+/**
+ * Sanitizes generated character prompt by removing unwanted meta, quality, style,
+ * and static expression tags so the prompt remains strictly anatomical.
+ */
+export function sanitizeCharacterPrompt(raw: string): string {
+  const bannedPhrases = [
+    /\b(realistic\s+)?anime\s+style\b/gi,
+    /\bhigh\s+quality\b/gi,
+    /\bbest\s+quality\b/gi,
+    /\bmasterpiece\b/gi,
+    /\bdetailed\s+character\s+design\b/gi,
+    /\b(simple|neutral|blank)\s+expression\b/gi,
+    /\bconcept\s+art\b/gi,
+    /\billustration\b/gi,
+    /\bdigital\s+art\b/gi,
+    /\bphotorealistic\b/gi,
+    /\b8k\b/gi,
+    /\btrending\s+on\s+artstation\b/gi,
+    /\bhyperdetailed\b/gi,
+  ];
+
+  let cleaned = raw;
+  for (const pattern of bannedPhrases) {
+    cleaned = cleaned.replace(pattern, "");
+  }
+
+  // Split into tags, trim, deduplicate, and remove job words if standing alone
+  const tags = cleaned
+    .split(",")
+    .map((t) => t.trim())
+    .filter(
+      (t) =>
+        t.length > 0 &&
+        !/^(teacher|student|nurse|office worker|doctor|pilot|engineer)$/i.test(t)
+    );
+
+  // Deduplicate while preserving order
+  const uniqueTags: string[] = [];
+  for (const tag of tags) {
+    if (!uniqueTags.some((u) => u.toLowerCase() === tag.toLowerCase())) {
+      uniqueTags.push(tag);
+    }
+  }
+
+  return uniqueTags.join(", ");
+}
+
 /**
  * Improves user's character description into an Anima-optimized physical identity prompt.
- * Focuses on bodily proportions, face shape, eye color, hair, facial features, minimizing clothes.
+ * Focuses strictly on bodily proportions, figure silhouette, face shape, eye color, hair,
+ * and facial features, while completely excluding style, quality, expression, and clothing tags.
  */
 export async function enhanceCharacterPrompt(
   userPrompt: string,
-  characterName: string
+  characterName: string,
+  options?: EnhancePromptOptions
 ): Promise<string> {
   const systemPrompt = `You are an expert anime character designer and prompt engineer for diffusion models (specifically the Anima model).
-Your task is to convert the user's character idea into an ultra-detailed, Danbooru/tag-informed character identity prompt.
+Your task is to convert the user's character idea into an ultra-detailed, Danbooru/tag-informed character physical identity prompt.
 
-CRITICAL REQUIREMENTS:
-1. The Anima model will use this EXACT verbatim prompt across many different scenes, environments, and situations.
-2. Therefore, YOU MUST FOCUS STRONGLY ON BODILY PROPORTIONS, FACIAL FEATURES, AND NATURAL TRAITS, AND MINIMIZE/AVOID SPECIFIC CLOTHING.
-   - Bodily proportions: gender tag (e.g. 1girl / 1boy / 1man / 1woman), apparent age, body frame, height, shoulder width, waistline, limb build, posture.
-   - Hair: exact color, hairstyle, hair length (e.g. waist-length, shoulder-length), bangs type, hair texture, distinct strands/locks.
-   - Eyes: exact eye color, iris detail, eye shape, eyelashes, eyebrows.
-   - Facial features: skin tone, jaw/chin shape, nose type, cheeks, distinct facial marks (e.g. beauty mark, small mole under left eye, faint scar, freckles).
-   - Clothing: DO NOT describe elaborate clothes or specific uniforms (clothes will be added in scene-specific story prompts). At most specify "simple generic neutral clothes" or leave clothing unspecified.
-3. Use comma-separated descriptive anime tags and phrases that diffusion models understand best.
-4. Output ONLY the resulting prompt tags, nothing else (no conversational filler, no markdown codeblocks).`;
+CRITICAL PURPOSE:
+The Anima model will use this EXACT verbatim prompt across many different scenes, environments, poses, and outfits.
+Therefore, YOU MUST FOCUS EXCLUSIVELY ON PHYSICAL BODY PROPORTIONS, FIGURE SILHOUETTE, FACIAL ANATOMY, AND NATURAL FEATURES.
 
-  const userMsg = `Character Name: ${characterName || "Character"}
-User's description: ${userPrompt}
+1. FIGURE SILHOUETTE & BODY PROPORTIONS (BE HIGHLY SPECIFIC):
+   - Figure silhouette: choose or match the exact figure type (e.g. "hourglass figure", "curvy figure", "pear-shaped body", "apple-shaped figure", "athletic build", "toned physique", "slender build", "lean frame", "chubby build", "plump body", "heavyset body", "thick build", "stocky build", "petite frame", "tall statuesque build").
+   - Torso & waistline: waist-to-hip ratio (e.g. "narrow waist", "defined waistline", "straight waist", "soft natural waist"), hips ("wide hips", "curved hips", "narrow hips"), abdomen ("flat stomach", "soft belly").
+   - Chest / Bust / Shoulders: chest proportion (e.g. "medium breasts", "large breasts", "ample bust", "small breasts", "flat chest", "broad chest", "muscular pectorals"), shoulder structure ("broad shoulders", "sloping shoulders", "soft shoulders", "narrow shoulders").
+   - Limbs & Stature: leg and arm proportions ("thick thighs", "slender thighs", "soft curved legs", "long legs", "toned arms", "proportional limbs"), height ("tall height", "petite height", "average height").
 
-Generate the detailed bodily and facial identity prompt:`;
+2. FACIAL PROPORTIONS & BONE STRUCTURE:
+   - Cranial & jaw geometry: face shape ("oval face", "round face", "heart-shaped face", "diamond face"), jawline ("sharp angular jawline", "soft rounded jaw", "defined jaw", "chiseled jaw"), chin ("pointed chin", "rounded chin", "cleft chin"), cheekbones ("high cheekbones", "soft cheeks", "prominent cheekbones").
+   - Facial feature geometry & spacing: eye placement ("almond-shaped eyes", "wide-set eyes", "deep-set eyes", "large expressive eyes"), nose bridge ("straight nose bridge", "button nose", "aquiline nose", "narrow nose tip"), lips ("full lips", "thin lips", "defined cupid's bow", "wide mouth").
+   - Eyes & Eyebrows: exact iris color, pupil style, eyelashes ("long dark eyelashes"), eyebrow shape ("arched eyebrows", "soft straight eyebrows").
+   - Hair: exact color, hairstyle, hair length ("waist-length", "shoulder-length", "short cropped"), bangs type, hair texture.
+   - Complexion & marks: skin tone ("fair porcelain skin", "warm tan skin", "olive skin"), distinct physical marks ("beauty mark under left eye", "faint freckles across nose bridge", "small scar").
 
-  const enhanced = await callLlmChat([
-    { role: "system", content: systemPrompt },
-    { role: "user", content: userMsg },
-  ], { temperature: 0.6 });
+3. STRICT PROHIBITIONS:
+   - DO NOT include style or rendering tags (e.g. NO "realistic anime style", NO "high quality", NO "detailed character design", NO "masterpiece", NO "illustration", NO "8k"). Style and quality are handled by the pipeline prefill.
+   - DO NOT include emotional or expression tags (e.g. NO "simple expression", NO "neutral expression", NO "smiling", NO "frowning"). Expressions vary per scene in the visual novel!
+   - DO NOT include clothes, costumes, or job titles (e.g. NO "teacher", NO "suit", NO "uniform", NO "dress"). Clothes are added in story scenes!
 
-  // Clean any quotes or stray markdown formatting
-  return enhanced.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").trim();
+4. FORMAT:
+   - Output ONLY the comma-separated descriptive anime tags and phrases.
+   - No explanations, no markdown codeblocks, no extra commentary.`;
+
+  let userMsg = `Character Name: ${characterName || "Character"}
+User's description: ${userPrompt}`;
+
+  if (options?.figureStyle && options.figureStyle !== "Auto") {
+    userMsg += `\nPreferred Figure Silhouette / Body Proportions: ${options.figureStyle}`;
+  }
+  if (options?.faceShape && options.faceShape !== "Auto") {
+    userMsg += `\nPreferred Face Shape / Jawline: ${options.faceShape}`;
+  }
+
+  userMsg += `\n\nGenerate the detailed bodily and facial identity prompt:`;
+
+  const enhanced = await callLlmChat(
+    [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userMsg },
+    ],
+    { temperature: 0.6 }
+  );
+
+  // Clean markdown quotes if any
+  const rawText = enhanced.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").trim();
+
+  // Apply deterministic tag sanitizer
+  return sanitizeCharacterPrompt(rawText);
 }
 
 /**

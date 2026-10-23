@@ -61,6 +61,8 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
   // New Character Creation Form
   const [charName, setCharName] = useState("");
   const [charPrompt, setCharPrompt] = useState("");
+  const [figureStyle, setFigureStyle] = useState("Auto");
+  const [faceShape, setFaceShape] = useState("Auto");
   const [enhancedPrompt, setEnhancedPrompt] = useState("");
   const [charAvatarUrl, setCharAvatarUrl] = useState<string | undefined>(undefined);
   const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false);
@@ -124,7 +126,10 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
     setIsEnhancingPrompt(true);
 
     try {
-      const enhanced = await enhanceCharacterPrompt(charPrompt, charName);
+      const enhanced = await enhanceCharacterPrompt(charPrompt, charName, {
+        figureStyle: figureStyle !== "Auto" ? figureStyle : undefined,
+        faceShape: faceShape !== "Auto" ? faceShape : undefined,
+      });
       setEnhancedPrompt(enhanced);
     } catch (err: any) {
       setCharFormError(
@@ -205,6 +210,8 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
     // Reset Form
     setCharName("");
     setCharPrompt("");
+    setFigureStyle("Auto");
+    setFaceShape("Auto");
     setEnhancedPrompt("");
     setCharAvatarUrl(undefined);
     setPortraitStatus("");
@@ -553,6 +560,80 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
                   placeholder="e.g. A 22-year-old athletic pilot woman with long silver hair tied in a high ponytail, striking blue eyes, confident smile..."
                   className="w-full bg-zinc-950 border border-zinc-800 focus:border-fuchsia-500 focus:ring-1 focus:ring-fuchsia-500 rounded-xl p-3 text-xs sm:text-sm text-zinc-100 placeholder:text-zinc-600 transition-colors resize-none shadow-inner"
                 />
+
+                {/* Figure Silhouette & Body Proportions Options */}
+                <div className="flex flex-col gap-1.5 mt-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                      Figure Silhouette & Body Proportions (Optional Guide)
+                    </span>
+                    <span className="text-[10px] text-fuchsia-400 font-medium">
+                      {figureStyle === "Auto" ? "AI Inferred" : figureStyle}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      "Auto",
+                      "Hourglass",
+                      "Curvy",
+                      "Pear-shaped",
+                      "Athletic / Toned",
+                      "Slender / Lean",
+                      "Chubby / Plump",
+                      "Stocky / Heavyset",
+                      "Petite",
+                      "Tall & Statuesque",
+                    ].map((style) => (
+                      <button
+                        key={style}
+                        type="button"
+                        onClick={() => setFigureStyle(style)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                          figureStyle === style
+                            ? "bg-fuchsia-600 text-white shadow-sm"
+                            : "bg-zinc-800/80 text-zinc-300 hover:text-white hover:bg-zinc-700"
+                        }`}
+                      >
+                        {style}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Face Structure / Jawline Options */}
+                <div className="flex flex-col gap-1.5 mt-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                      Face Shape & Jawline (Optional Guide)
+                    </span>
+                    <span className="text-[10px] text-fuchsia-400 font-medium">
+                      {faceShape === "Auto" ? "AI Inferred" : faceShape}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      "Auto",
+                      "Oval Face",
+                      "Round Face",
+                      "Heart-shaped",
+                      "Sharp Angular Jaw",
+                      "Soft Rounded Jaw",
+                    ].map((shape) => (
+                      <button
+                        key={shape}
+                        type="button"
+                        onClick={() => setFaceShape(shape)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                          faceShape === shape
+                            ? "bg-fuchsia-600 text-white shadow-sm"
+                            : "bg-zinc-800/80 text-zinc-300 hover:text-white hover:bg-zinc-700"
+                        }`}
+                      >
+                        {shape}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {/* AI Improved Verbatim Prompt */}
@@ -572,7 +653,7 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
                     className="w-full bg-zinc-900 border border-zinc-800 focus:border-fuchsia-500 rounded-lg p-2.5 text-xs text-zinc-200 font-mono transition-colors resize-none"
                   />
                   <p className="text-[10px] text-zinc-400 italic">
-                    Focuses on body proportions, height, face shape, eye & hair colors. Clothing is left generic so the visual novel can change outfits per scene.
+                    Pure bodily proportions, figure silhouette, and facial structure. Style, quality, expressions, and clothing are intentionally excluded.
                   </p>
                 </div>
               )}
