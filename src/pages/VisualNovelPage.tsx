@@ -92,10 +92,20 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
     return chars.slice(0, 2).map((c) => c.id);
   });
 
+  // Helper to infer gender from prompt text without requiring artificial toggle
+  const inferGenderFromText = (text: string): "female" | "male" | undefined => {
+    const lower = text.toLowerCase();
+    if (/\b(woman|female|girl|1girl|she|her|mother|sister|daughter|lady|actress|waitress|heroine)\b/.test(lower)) {
+      return "female";
+    }
+    if (/\b(man|male|boy|1boy|he|him|his|father|brother|son|gentleman|actor|waiter|hero)\b/.test(lower)) {
+      return "male";
+    }
+    return undefined;
+  };
+
   // New Character Creation Form
   const [charName, setCharName] = useState("");
-  const [charGender, setCharGender] = useState<"female" | "male">("female");
-  const [charRole, setCharRole] = useState("Civilian Passenger");
   const [charBaselineOutfit, setCharBaselineOutfit] = useState("");
   const [charBaselineAttireId, setCharBaselineAttireId] = useState<string | undefined>(undefined);
   const [isWardrobeModalOpen, setIsWardrobeModalOpen] = useState(false);
@@ -233,19 +243,16 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
     setIsEnhancingPrompt(true);
 
     try {
+      const detectedGender = inferGenderFromText(`${charName} ${charPrompt}`);
       const profile = await enhanceCharacterProfile(charPrompt, charName, {
-        gender: charGender,
+        gender: detectedGender,
         figureStyle: figureStyle !== "Auto" ? figureStyle : undefined,
         faceShape: faceShape !== "Auto" ? faceShape : undefined,
-        role: charRole.trim() || undefined,
         baselineOutfit: charBaselineOutfit.trim() || undefined,
       });
       setEnhancedPrompt(profile.verbatimIdentityPrompt);
       if (!charBaselineOutfit.trim()) {
         setCharBaselineOutfit(profile.baselineOutfit);
-      }
-      if (!charRole.trim() || charRole === "Civilian Passenger") {
-        setCharRole(profile.role);
       }
     } catch (err: any) {
       setCharFormError(
@@ -305,11 +312,11 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
       return;
     }
 
+    const detectedGender = inferGenderFromText(`${charName} ${charPrompt} ${finalPrompt}`);
     const newChar: VNCharacter = {
       id: `char_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       name: charName.trim(),
-      gender: charGender,
-      role: charRole.trim() || "Civilian Passenger",
+      gender: detectedGender,
       baselineOutfit: charBaselineOutfit.trim() || undefined,
       baselineAttireId: charBaselineAttireId,
       userPrompt: charPrompt.trim(),
@@ -332,8 +339,6 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
 
     // Reset Form
     setCharName("");
-    setCharGender("female");
-    setCharRole("Civilian Passenger");
     setCharBaselineOutfit("");
     setCharBaselineAttireId(undefined);
     setCharPrompt("");
@@ -587,18 +592,21 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
   // Helper for Reader emotion parsing from dialogue voice cues
   const parseEmotionFromCue = (cue: string = ""): string => {
     const c = cue.toLowerCase();
-    if (c.includes("shy") || c.includes("blush") || c.includes("bashful") || c.includes("hesitant")) return "shy";
-    if (c.includes("happy") || c.includes("smile") || c.includes("cheer")) return "happy";
-    if (c.includes("laugh") || c.includes("giggle") || c.includes("chuckle")) return "laughing";
-    if (c.includes("angry") || c.includes("shout") || c.includes("furious") || c.includes("stern") || c.includes("aggressive")) return "angry";
-    if (c.includes("smug") || c.includes("grin") || c.includes("confident")) return "smug";
-    if (c.includes("sad") || c.includes("cry") || c.includes("tear") || c.includes("sorrow")) return "sad";
-    if (c.includes("surpris") || c.includes("gasp") || c.includes("shock")) return "surprised";
-    if (c.includes("think") || c.includes("ponder") || c.includes("curious")) return "thinking";
-    if (c.includes("flirt") || c.includes("seduct") || c.includes("allur")) return "flirty";
+    if (c.includes("fluster") || c.includes("embarrass")) return "embarrassed";
+    if (c.includes("smirk") || c.includes("playful") || c.includes("wry")) return "smirk";
+    if (c.includes("shy") || c.includes("blush") || c.includes("bashful") || c.includes("hesitant") || c.includes("timid")) return "shy";
+    if (c.includes("laugh") || c.includes("giggle") || c.includes("chuckle") || c.includes("mirth")) return "laughing";
+    if (c.includes("happy") || c.includes("smile") || c.includes("cheer") || c.includes("welcom")) return "happy";
+    if (c.includes("angry") || c.includes("shout") || c.includes("furious") || c.includes("stern") || c.includes("reprimand")) return "angry";
+    if (c.includes("sad") || c.includes("cry") || c.includes("tear") || c.includes("sorrow") || c.includes("melanchol")) return "sad";
+    if (c.includes("surpris") || c.includes("gasp") || c.includes("shock") || c.includes("startl")) return "surprised";
+    if (c.includes("think") || c.includes("ponder") || c.includes("curious") || c.includes("contemplat")) return "thinking";
+    if (c.includes("flirt") || c.includes("seduct") || c.includes("allur")) return "seductive";
     if (c.includes("wave") || c.includes("greet")) return "waving";
     if (c.includes("cross")) return "crossed_arms";
     if (c.includes("hip")) return "hands_on_hips";
+    if (c.includes("relie") || c.includes("sigh")) return "relieved";
+    if (c.includes("disgust") || c.includes("repuls")) return "disgusted";
     return "neutral";
   };
 
@@ -657,9 +665,9 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
                 </div>
               )}
 
-              {/* Character Name & Gender */}
+              {/* Character Name & Baseline Attire */}
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                <div className="sm:col-span-8">
+                <div className="sm:col-span-5">
                   <label className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-1.5">
                     Character Name
                   </label>
@@ -668,52 +676,7 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
                     value={charName}
                     onChange={(e) => setCharName(e.target.value)}
                     placeholder="e.g. Elena, Captain Mark, Aoi"
-                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-fuchsia-500 focus:ring-1 focus:ring-fuchsia-500 rounded-xl px-4 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 transition-colors shadow-inner"
-                  />
-                </div>
-                <div className="sm:col-span-4">
-                  <label className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-1.5">
-                    Gender Anchor
-                  </label>
-                  <div className="flex p-1 rounded-xl bg-zinc-950 border border-zinc-800">
-                    <button
-                      type="button"
-                      onClick={() => setCharGender("female")}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                        charGender === "female"
-                          ? "bg-fuchsia-600 text-white shadow-sm"
-                          : "text-zinc-400 hover:text-zinc-200"
-                      }`}
-                    >
-                      ♀ Female
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCharGender("male")}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                        charGender === "male"
-                          ? "bg-indigo-600 text-white shadow-sm"
-                          : "text-zinc-400 hover:text-zinc-200"
-                      }`}
-                    >
-                      ♂ Male
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Role & Baseline Attire */}
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                <div className="sm:col-span-5">
-                  <label className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-1.5">
-                    Role / Archetype
-                  </label>
-                  <input
-                    type="text"
-                    value={charRole}
-                    onChange={(e) => setCharRole(e.target.value)}
-                    placeholder="e.g. Civilian Passenger, Teacher, Doctor"
-                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-fuchsia-500 rounded-xl px-4 py-2 text-xs sm:text-sm text-zinc-100 placeholder:text-zinc-600 transition-colors shadow-inner"
+                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-fuchsia-500 focus:ring-1 focus:ring-fuchsia-500 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-zinc-100 placeholder:text-zinc-600 transition-colors shadow-inner"
                   />
                 </div>
                 <div className="sm:col-span-7">
@@ -737,42 +700,33 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
                       setCharBaselineOutfit(e.target.value);
                       setCharBaselineAttireId(undefined);
                     }}
-                    placeholder="e.g. casual grey t-shirt, dark denim jeans, white sneakers"
+                    placeholder="e.g. casual white linen shirt, dark blue jeans, white sneakers"
                     className="w-full bg-zinc-950 border border-zinc-800 focus:border-fuchsia-500 rounded-xl px-4 py-2 text-xs sm:text-sm text-zinc-100 placeholder:text-zinc-600 transition-colors shadow-inner"
                   />
                 </div>
               </div>
 
               {/* Quick Outfit Presets */}
-              <div className="flex flex-wrap items-center gap-1.5 -mt-2">
+              <div className="flex flex-wrap items-center gap-1.5 -mt-1">
                 <span className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider mr-1">
                   Presets:
                 </span>
                 {[
                   {
                     label: "Civilian Casual",
-                    outfit:
-                      charGender === "male"
-                        ? "casual grey crewneck t-shirt, dark denim jeans, white sneakers"
-                        : "casual white linen shirt, dark blue jeans, white sneakers",
+                    outfit: "casual white linen shirt, dark blue jeans, white sneakers",
                   },
                   {
                     label: "Summer Vacation",
-                    outfit:
-                      charGender === "male"
-                        ? "short-sleeve floral shirt, khaki shorts, boat shoes"
-                        : "light floral sundress, sunhat, leather sandals",
+                    outfit: "short-sleeve resort camp shirt, khaki chino shorts, boat shoes",
                   },
                   {
-                    label: "Office Casual",
-                    outfit:
-                      charGender === "male"
-                        ? "light blue collared shirt, dark grey slacks, leather shoes"
-                        : "silk button-up blouse, tailored trousers, flats",
+                    label: "Office Professional",
+                    outfit: "silk button-up blouse, tailored wool trousers, leather dress shoes",
                   },
                   {
                     label: "Outdoor Adventure",
-                    outfit: "windbreaker jacket, rugged cargo pants, hiking boots",
+                    outfit: "weather-resistant ripstop utility jacket, cargo pants, hiking boots",
                   },
                 ].map((preset) => (
                   <button
@@ -1028,13 +982,15 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
                                 <h4 className="text-sm font-bold text-white truncate">
                                   {c.name}
                                 </h4>
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                                  c.gender === "male"
-                                    ? "bg-indigo-500/10 text-indigo-300 border border-indigo-500/20"
-                                    : "bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20"
-                                }`}>
-                                  {c.gender === "male" ? "♂ Male" : "♀ Female"}
-                                </span>
+                                {c.gender && (
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                                    c.gender === "male"
+                                      ? "bg-indigo-500/10 text-indigo-300 border border-indigo-500/20"
+                                      : "bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20"
+                                  }`}>
+                                    {c.gender === "male" ? "♂ Male" : "♀ Female"}
+                                  </span>
+                                )}
                               </div>
                               <button
                                 type="button"
@@ -1075,23 +1031,45 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
                 )}
 
                 {characters.length > 0 && (
-                  <div className="flex flex-col sm:flex-row gap-2 mt-2">
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab("wardrobe")}
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-xs font-semibold text-zinc-300 hover:text-white transition-colors"
-                    >
-                      <Shirt className="w-3.5 h-3.5 text-fuchsia-400" />
-                      <span>Wardrobe Studio ({attires.length})</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab("story")}
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-500 text-xs font-semibold text-white transition-colors shadow-sm"
-                    >
-                      <span>Proceed to Story Setup ({selectedCharIds.length} selected)</span>
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
+                  <div className="flex flex-col gap-2.5 mt-3 pt-3 border-t border-zinc-800">
+                    <div className="flex items-center justify-between text-xs text-zinc-400">
+                      <span className="font-semibold text-zinc-300 flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-fuchsia-400" />
+                        {selectedCharIds.length} of 3 Cast Members Selected
+                      </span>
+                      <span className="text-[11px] text-zinc-500 font-mono">Pipeline: Step 1 of 5</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("wardrobe")}
+                        className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-zinc-800/90 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 transition-colors border border-zinc-700/60"
+                      >
+                        <Shirt className="w-4 h-4 text-fuchsia-400" />
+                        <span>Step 2: Clothes & Wardrobe</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("sprites")}
+                        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-fuchsia-600 to-indigo-600 hover:from-fuchsia-500 hover:to-indigo-500 text-xs font-bold text-white transition-all shadow-lg shadow-fuchsia-600/20"
+                      >
+                        <span>Step 3: Sprites & Emotions</span>
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] text-zinc-500 px-1 pt-0.5">
+                      <span>Next step: Generate transparent emotion cutouts in Step 3</span>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("locations")}
+                        className="text-zinc-400 hover:text-white underline underline-offset-2 transition"
+                      >
+                        Skip to Step 4: Worlds
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1110,6 +1088,7 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
             characters={characters}
             onAssignToCharacter={handleAssignAttireToCharacter}
             endpoint={endpoint}
+            onNavigateTab={setActiveTab}
           />
         )}
 
@@ -1122,6 +1101,7 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
             attires={attires}
             endpoint={endpoint}
             onSaveCharacter={handleSaveCharacterFromStudio}
+            onNavigateTab={setActiveTab}
           />
         )}
 
@@ -1134,23 +1114,34 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
             onSaveWorld={handleSaveWorld}
             onDeleteWorld={handleDeleteWorld}
             endpoint={endpoint}
+            onNavigateTab={setActiveTab}
           />
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 2: STORY & SCENES (Step 3, 4, 5) */}
+        {/* TAB 5: STORY & SCENES */}
         {/* ========================================================================= */}
         {activeTab === "story" && (
           <div className="flex flex-col gap-6 max-w-4xl mx-auto w-full">
             {/* Story Outline Card */}
             <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-5 sm:p-6 flex flex-col gap-5 shadow-xl">
               <div>
-                <h2 className="text-base font-bold text-white flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-fuchsia-400" />
-                  Step 2: Story Direction & Opening Scene
-                </h2>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <h2 className="text-base font-bold text-white flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-fuchsia-400" />
+                    Step 5: Story Direction & Scene Planner
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("locations")}
+                    className="text-xs text-zinc-400 hover:text-white flex items-center gap-1 transition"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    <span>Back to Step 4: Worlds</span>
+                  </button>
+                </div>
                 <p className="text-xs text-zinc-400 mt-1">
-                  Outline where the story will go and how it begins. The Anima pipeline will generate scenes one by one using the verbatim character descriptions to maintain visual identity.
+                  Assemble your selected cast and locations into a multi-scene visual novel with branching dialogue and layered sprite staging.
                 </p>
               </div>
 

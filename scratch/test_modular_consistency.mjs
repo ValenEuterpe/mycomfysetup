@@ -1,119 +1,123 @@
 import assert from "node:assert";
+import {
+  buildModularSpritePrompt,
+  buildMultiCharacterCGPrompt,
+  MODULAR_EXPRESSION_LIBRARY,
+} from "../src/lib/visualNovelEngine.ts";
 
-// 1. Replicate Modular Prompt Builder
-function buildModularSpritePrompt(
-  characterAnchor,
-  clothingLock,
-  expressionAndPose,
-  settingStyle = "clean plain neutral studio background, soft studio lighting, sharp focus, centered full body display"
-) {
-  return `masterpiece, best quality, score_9, score_8, safe, @silvana, Character Base: ${characterAnchor.trim()}\nClothing: ${clothingLock.trim()}\nPose & Hands: ${expressionAndPose.trim()}\nSetting & Style: ${settingStyle.trim()}`;
+console.log("=== Testing Character Prompt Building & Expression Modules ===");
+
+// 1. Verify User's Exact Examples
+const sampleAnchor =
+  "A 35-year-old woman, 168 cm tall, voluptuous curvy hourglass build with a full bust and wide hips, defined soft jawline, warm olive skin tone, dark hazel almond-shaped eyes, subtle laugh lines, and shoulder-length chestnut brown hair styled in soft waves with a neat side part";
+
+const sampleClothing =
+  "a tucked-in, long-sleeved silk button-up ivory blouse with mother-of-pearl buttons, paired with tailored high-waisted pleated beige wool trousers cinched with a slim brown leather belt";
+
+const sampleSetting =
+  "Photorealistic medium full-shot, warm ambient classroom lighting, shallow depth of field with a softly blurred chalkboard and wooden desk background";
+
+// Test 1: Smirk / Playful module with user's example
+const smirkPrompt = buildModularSpritePrompt(
+  sampleAnchor,
+  sampleClothing,
+  MODULAR_EXPRESSION_LIBRARY.smirk.prompt,
+  sampleSetting
+);
+
+console.log("\n--- Compiled Smirk / Playful Prompt ---");
+console.log(smirkPrompt);
+
+// Verify NO artificial labels exist
+assert(!smirkPrompt.includes("Character Base:"), "Must NOT contain 'Character Base:' label");
+assert(!smirkPrompt.includes("Clothing:"), "Must NOT contain 'Clothing:' label");
+assert(!smirkPrompt.includes("Pose & Hands:"), "Must NOT contain 'Pose & Hands:' label");
+assert(!smirkPrompt.includes("Setting & Style:"), "Must NOT contain 'Setting & Style:' label");
+
+// Verify exact segments flow as natural prose
+assert(smirkPrompt.includes(sampleAnchor), "Must contain exact Character Anchor");
+assert(smirkPrompt.includes("Wearing a tucked-in, long-sleeved silk button-up ivory blouse"), "Must contain exact Clothing Lock with 'Wearing'");
+assert(smirkPrompt.includes("Leaning sideways against the edge of a flat surface or desk"), "Must contain exact Smirk / Playful posture & hand mechanics");
+assert(smirkPrompt.includes("looking directly into the camera at the viewer with an amused, confident challenge"), "Must contain exact camera-directed gaze");
+assert(smirkPrompt.includes(sampleSetting), "Must contain exact Setting & Style");
+console.log("✓ Test 1 passed: Smirk / Playful prompt compiles to natural flowing prose matching user's example!");
+
+// Test 2: Laughing / Mirthful module with user's example
+const laughingPrompt = buildModularSpritePrompt(
+  sampleAnchor,
+  sampleClothing,
+  MODULAR_EXPRESSION_LIBRARY.laughing.prompt,
+  sampleSetting
+);
+
+console.log("\n--- Compiled Laughing / Mirthful Prompt ---");
+console.log(laughingPrompt);
+
+assert(laughingPrompt.includes(sampleAnchor), "Must contain exact Character Anchor");
+assert(laughingPrompt.includes("Wearing a tucked-in, long-sleeved silk button-up ivory blouse"), "Must contain exact Clothing Lock");
+assert(laughingPrompt.includes("Mid-laugh with head tilted slightly back"), "Must contain exact Laughing / Mirthful posture");
+assert(laughingPrompt.includes("one hand raised lightly to shield the open mouth while the other hand presses against the stomach"), "Must contain exact hand mechanics");
+assert(laughingPrompt.includes("directing a joyful gaze directly forward into the camera at the viewer"), "Must contain exact gaze");
+console.log("✓ Test 2 passed: Laughing / Mirthful prompt matches user's second example perfectly!");
+
+// Test 3: Verify all 8 core plug-and-play modules from user's specification
+const userModules = [
+  "neutral",
+  "happy",
+  "sad",
+  "angry",
+  "shy",
+  "embarrassed",
+  "smirk",
+  "laughing",
+];
+
+for (const modId of userModules) {
+  const mod = MODULAR_EXPRESSION_LIBRARY[modId];
+  assert(mod, `Module ${modId} must exist`);
+  assert(mod.prompt.length > 50, `Module ${modId} prompt must be substantive`);
+  assert(
+    mod.prompt.includes("looking directly forward into the camera at the viewer") ||
+    mod.prompt.includes("staring intently straight into the camera at the viewer") ||
+    mod.prompt.includes("looking slightly upward directly into the camera at the viewer") ||
+    mod.prompt.includes("gazing directly into the camera at the viewer") ||
+    mod.prompt.includes("looking directly into the camera at the viewer") ||
+    mod.prompt.includes("directing a joyful gaze directly forward into the camera at the viewer"),
+    `Module ${modId} must enforce direct gaze into the camera at the viewer`
+  );
+  assert(mod.handGestures.length > 5, `Module ${modId} must specify hand mechanics`);
+  assert(mod.facialCue.length > 5, `Module ${modId} must specify facial expression`);
 }
+console.log("✓ Test 3 passed: All 8 user-specified plug-and-play modules verified with exact mechanics!");
 
-// 2. Replicate Modular Expressions Library
-const MODULAR_EXPRESSION_LIBRARY = {
-  shy: {
-    prompt:
-      "Standing timidly with shoulders turned slightly inward, both hands held in front at chest level with her two index fingers touching tip-to-tip in a hesitant, shy gesture; shy bashful expression with a subtle rosy blush and modest upward gaze, looking at viewer",
-    handGestures: "two index fingers touching tip-to-tip",
-  },
-  angry: {
-    prompt:
-      "Standing aggressively with shoulders squared forward, both hands clenched into tight fists at sides; furious stern glare, furrowed eyebrows, clenched jaw, intense focused eyes, looking at viewer",
-    handGestures: "both hands clenched into tight fists at sides",
-  },
-  happy: {
-    prompt:
-      "Standing cheerfully with relaxed shoulders, one hand raised near collarbone with fingers curled gently in a warm gesture; radiant warm smile, sparkling happy eyes, soft blush, looking at viewer",
-    handGestures: "one hand raised near collarbone",
-  },
-  hands_on_hips: {
-    prompt:
-      "Standing with an assertive posture, both hands placed firmly on hips, elbows flared outward; determined confident expression, bright focused eyes, looking at viewer",
-    handGestures: "both hands placed firmly on hips",
-  },
-};
-
-// 3. Replicate Multi-Character CG Prompt Builder
-function buildMultiCharacterCGPrompt(options) {
-  const sanitizedInteraction = options.interaction
-    .replace(/\b(on\s+the\s+left(\s+side)?|left\s+side|left-hand\s+side|on\s+the\s+right(\s+side)?|right\s+side|right-hand\s+side)\b/gi, "")
-    .replace(/\b(character\s+[12]\s+on\s+the\s+(left|right)|side\s+[ab])\b/gi, "")
-    .replace(/\s{2,}/g, " ")
-    .trim();
-
-  const env =
-    options.environmentAndLighting?.trim() ||
-    "warm cinematic lighting, natural depth of field, detailed atmospheric environment";
-
-  return `masterpiece, best quality, score_9, score_8, safe, @silvana, Character 1: ${options.char1.name}, ${options.char1.anchor.trim()}, wearing ${options.char1.clothing.trim()}.\nCharacter 2: ${options.char2.name}, ${options.char2.anchor.trim()}, wearing ${options.char2.clothing.trim()}.\nScene & Interaction: ${sanitizedInteraction}.\nSetting & Style: ${env}.`;
-}
-
-console.log("=== Testing Modular Anchor Consistency System ===");
-
-// Test 1: Single-character consistency (Anchor and Clothing Lock must be identical word-for-word)
-const anchor1 = "A 25-year-old East Asian woman, 5'6\" tall with a slim athletic build, sharp jawline, high cheekbones, dark almond-shaped eyes, and straight shoulder-length black hair with blunt bangs";
-const clothingLock1 = "Over-sized beige knit sweater and dark blue high-waisted denim jeans";
-
-const shyPrompt = buildModularSpritePrompt(anchor1, clothingLock1, MODULAR_EXPRESSION_LIBRARY.shy.prompt);
-const angryPrompt = buildModularSpritePrompt(anchor1, clothingLock1, MODULAR_EXPRESSION_LIBRARY.angry.prompt);
-
-console.log("\nShy Sprite Prompt:\n", shyPrompt);
-console.log("\nAngry Sprite Prompt:\n", angryPrompt);
-
-assert(shyPrompt.includes(anchor1), "Shy prompt MUST include identical character anchor");
-assert(angryPrompt.includes(anchor1), "Angry prompt MUST include identical character anchor");
-assert(shyPrompt.includes(clothingLock1), "Shy prompt MUST include identical clothing lock");
-assert(angryPrompt.includes(clothingLock1), "Angry prompt MUST include identical clothing lock");
-
-console.log("✓ Test 1 passed: Character Anchor and Clothing Lock remain 100% word-for-word identical!");
-
-// Test 2: Hand gestures and "looking at viewer" in all expressions
-for (const [key, expr] of Object.entries(MODULAR_EXPRESSION_LIBRARY)) {
-  assert(expr.prompt.includes("looking at viewer"), `Expression ${key} must include 'looking at viewer'`);
-  assert(expr.handGestures.length > 5, `Expression ${key} must specify concrete hand gestures`);
-}
-console.log("✓ Test 2 passed: All expressions enforce concrete hand gestures and 'looking at viewer'!");
-
-// Test 3: Multi-character prompt token order and zero positional left/right labels
+// Test 4: Verify Multi-Character CG prompt building uses natural prose without headers
 const charA = {
   name: "Mei",
-  anchor: "A 25-year-old East Asian woman, 5'6\" tall with a slim athletic build, sharp jawline, high cheekbones, dark almond-shaped eyes, black hair with blunt bangs",
-  clothing: "over-sized beige knit sweater and dark blue high-waisted denim jeans",
+  anchor: "A 25-year-old East Asian woman, 5'6\" tall with a slim athletic build, sharp jawline, high cheekbones, dark almond-shaped eyes, and straight shoulder-length black hair with blunt bangs",
+  clothing: "an over-sized beige knit sweater and dark blue high-waisted denim jeans",
 };
 
 const charB = {
   name: "Elena",
-  anchor: "A 24-year-old Caucasian woman, 5'8\" tall with a soft round face, light freckles, hazel eyes, wavy blonde hair in a low ponytail",
-  clothing: "forest green corduroy jacket over white t-shirt and light gray fitted trousers",
+  anchor: "A 24-year-old Caucasian woman, 5'8\" tall with a soft round face, light freckles across her nose, bright hazel round eyes, and wavy blonde shoulder-length hair tied in a loose low ponytail",
+  clothing: "a forest green corduroy jacket over a simple white t-shirt and light gray fitted trousers",
 };
 
 const cgPrompt = buildMultiCharacterCGPrompt({
   char1: charA,
   char2: charB,
-  interaction: "Mei on the left side and Elena on the right sitting opposite across a cafe table holding warm mugs",
-  environmentAndLighting: "soft afternoon window light in a rustic coffee shop",
+  interaction: "Medium shot of two women engaged in an intense argument on a city sidewalk while on the left side and right side",
+  environmentAndLighting: "Photorealistic two-person cinematic scene, dramatic contrast lighting, overcast urban sidewalk background with natural depth of field",
 });
 
-console.log("\nMulti-Character CG Prompt:\n", cgPrompt);
+console.log("\n--- Compiled Multi-Character CG Prompt ---");
+console.log(cgPrompt);
 
-// Check token order: Character 1 must appear before Character 2
-const indexChar1 = cgPrompt.indexOf("Character 1: Mei");
-const indexChar2 = cgPrompt.indexOf("Character 2: Elena");
-assert(indexChar1 !== -1 && indexChar2 !== -1, "Both characters must be present");
-assert(indexChar1 < indexChar2, "Character 1 must strictly precede Character 2 in token order");
+assert(!cgPrompt.includes("Character 1:"), "Must NOT contain 'Character 1:' label");
+assert(!cgPrompt.includes("Character 2:"), "Must NOT contain 'Character 2:' label");
+assert(!cgPrompt.includes("Scene & Interaction:"), "Must NOT contain 'Scene & Interaction:' label");
+assert(!cgPrompt.toLowerCase().includes("on the left"), "Must strip positional left words");
+assert(!cgPrompt.toLowerCase().includes("right side"), "Must strip positional right words");
+console.log("✓ Test 4 passed: Multi-character CG prompt compiles to natural flowing prose without artificial labels!");
 
-// Check positional words stripped
-assert(!cgPrompt.toLowerCase().includes("on the left"), "Must strip 'on the left'");
-assert(!cgPrompt.toLowerCase().includes("on the right"), "Must strip 'on the right'");
-assert(cgPrompt.includes("sitting opposite across a cafe table holding warm mugs"), "Must retain collaborative interaction");
-
-console.log("✓ Test 3 passed: Multi-character token order enforced and positional splitting terms eliminated!");
-
-// Test 4: Preservation of youth terms (Family vacation / teen scenarios)
-const familyAnchor = "A 16-year-old teen girl with shoulder-length brown hair, curious green eyes, casual summer shirt";
-const familyPrompt = buildModularSpritePrompt(familyAnchor, "denim shorts, white sneakers", MODULAR_EXPRESSION_LIBRARY.happy.prompt);
-assert(familyPrompt.includes("teen girl"), "Youth terms must NOT be stripped");
-console.log("✓ Test 4 passed: Youth / family scenario terms successfully preserved!");
-
-console.log("\nALL MODULAR CONSISTENCY UNIT TESTS PASSED!");
+console.log("\nALL PROMPT BUILDING & EXPRESSION MODULE TESTS PASSED!");

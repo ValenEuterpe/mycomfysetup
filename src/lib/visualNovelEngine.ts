@@ -1,5 +1,5 @@
 import { ComfyWorkflowGraph, GeneratedMedia } from "../types/workflow";
-import { VNCharacter, VNScene } from "../types/visualNovel";
+import { VNCharacter, VNScene, VNLocation } from "../types/visualNovel";
 import { queuePrompt, pollPromptCompletion } from "./comfyClient";
 import { generateRandomSeed } from "./workflowInjector";
 
@@ -227,21 +227,47 @@ export const animaRemoveBgStickerWorkflow: ComfyWorkflowGraph = {
 };
 
 /**
+ * Helper to clean and format a sentence segment for Modular Anchor prompts.
+ * Strips line breaks and trailing punctuation so segments join into fluent natural prose.
+ */
+function cleanSentence(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/[.,;:\s]+$/, "")
+    .trim();
+}
+
+/**
  * Single-Character Consistency Blueprint:
  * [Character Anchor] + [Clothing Lock] + [Expression & Pose] + [Setting & Lighting Style]
  *
  * Rules:
- * 1. Keep [Character Anchor] and [Clothing Lock] 100% identical word-for-word across all prompts.
- * 2. Modify ONLY [Expression & Pose] and [Setting & Lighting].
- * 3. Combine pose, hand gestures, and emotion explicitly, always facing the player/viewer.
+ * 1. Flowing Natural Prose: No artificial section labels like "Character Base:" or "Pose & Hands:".
+ * 2. Keep [Character Anchor] and [Clothing Lock] 100% identical word-for-word across all prompts.
+ * 3. Modify ONLY [Expression & Pose] and [Setting & Lighting].
+ * 4. Combine exact anatomical postures, hand mechanics, facial expressions, and camera-directed gazes.
  */
 export function buildModularSpritePrompt(
   characterAnchor: string,
   clothingLock: string,
   expressionAndPose: string,
-  settingStyle = "clean plain neutral studio background, soft studio lighting, sharp focus, centered full body display"
+  settingStyle = "Clean plain neutral studio background, soft studio lighting, sharp focus, centered medium full-shot"
 ): string {
-  return `masterpiece, best quality, score_9, score_8, safe, @silvana, Character Base: ${characterAnchor.trim()}\nClothing: ${clothingLock.trim()}\nPose & Hands: ${expressionAndPose.trim()}\nSetting & Style: ${settingStyle.trim()}`;
+  const anchor = cleanSentence(characterAnchor);
+
+  let clothing = cleanSentence(clothingLock);
+  if (!/^wearing\s+/i.test(clothing)) {
+    clothing = `Wearing ${clothing.charAt(0).toLowerCase() + clothing.slice(1)}`;
+  } else {
+    clothing = `Wearing ${clothing.replace(/^wearing\s+/i, "")}`;
+  }
+
+  const pose = cleanSentence(expressionAndPose);
+  const setting = cleanSentence(settingStyle);
+
+  return `masterpiece, best quality, score_9, score_8, safe, @silvana, ${anchor}. ${clothing}. ${pose}. ${setting}.`;
 }
 
 export interface ModularExpressionPose {
@@ -255,126 +281,153 @@ export interface ModularExpressionPose {
 
 /**
  * Master Expression & Pose Library for single-character sprites.
- * Each entry strictly combines measurable hand positions, posture, facial cues,
- * and always includes "looking at viewer".
+ * Plug-and-play [Expression & Pose] modules containing exact anatomical postures,
+ * hand mechanics, facial expressions, and camera-directed gazes.
  */
 export const MODULAR_EXPRESSION_LIBRARY: Record<string, ModularExpressionPose> = {
   neutral: {
     id: "neutral",
-    name: "Neutral / Calm",
+    name: "Neutral / Attentive",
     category: "neutral",
     prompt:
-      "Standing upright with relaxed shoulders, arms resting naturally at sides with relaxed hands; calm composed expression, gentle relaxed lips, clear direct eyes, looking at viewer",
-    handGestures: "arms resting naturally at sides, open relaxed fingers",
-    facialCue: "calm composed expression, gentle relaxed lips",
-  },
-  shy: {
-    id: "shy",
-    name: "Shy / Bashful",
-    category: "shy",
-    prompt:
-      "Standing timidly with shoulders turned slightly inward, both hands held in front at chest level with her two index fingers touching tip-to-tip in a hesitant, shy gesture; shy bashful expression with a subtle rosy blush and modest upward gaze, looking at viewer",
-    handGestures: "both hands held at chest level with two index fingers touching tip-to-tip",
-    facialCue: "shy bashful expression, rosy blushing cheeks, modest upward gaze",
+      "Standing upright with relaxed shoulders, holding a leather-bound notebook against the side with one arm while the other hand rests naturally along the thigh; composed, neutral, attentive facial expression, lips relaxed in a straight line, looking directly forward into the camera at the viewer.",
+    handGestures: "holding a notebook against side with one arm, other hand resting along thigh",
+    facialCue: "composed neutral attentive expression, lips relaxed in a straight line",
   },
   happy: {
     id: "happy",
-    name: "Happy / Cheerful",
+    name: "Happy / Welcoming",
     category: "happy",
     prompt:
-      "Standing cheerfully with relaxed shoulders, one hand raised near collarbone with fingers curled gently in a warm gesture; radiant warm smile, sparkling happy eyes, soft blush, looking at viewer",
-    handGestures: "one hand raised near collarbone, gentle curled fingers",
-    facialCue: "radiant warm smile, sparkling happy eyes, soft blush",
-  },
-  laughing: {
-    id: "laughing",
-    name: "Laughing / Joyful",
-    category: "happy",
-    prompt:
-      "Standing joyfully tilted slightly back, one hand covering mouth in delightful amusement; cheerful open laughing expression, crinkling joyful eyes, looking at viewer",
-    handGestures: "one hand covering mouth in amusement",
-    facialCue: "cheerful open laughing expression, joyful crinkling eyes",
-  },
-  angry: {
-    id: "angry",
-    name: "Angry / Aggressive",
-    category: "dramatic",
-    prompt:
-      "Standing aggressively with shoulders squared forward, both hands clenched into tight fists at sides; furious stern glare, furrowed eyebrows, clenched jaw, intense focused eyes, looking at viewer",
-    handGestures: "both hands clenched into tight fists at sides",
-    facialCue: "furious stern glare, furrowed eyebrows, clenched jaw",
-  },
-  smug: {
-    id: "smug",
-    name: "Smug / Confident",
-    category: "happy",
-    prompt:
-      "Standing with confident posture, one hand placed firmly on hip with elbow flared out, other hand relaxed; playful smug smirk, half-lidded eyes, one eyebrow slightly raised, looking at viewer",
-    handGestures: "one hand placed firmly on hip, elbow flared out",
-    facialCue: "playful smug smirk, half-lidded eyes, one raised eyebrow",
+      "Leaning slightly forward at the waist, one hand gently resting on the hip while the other hand rests open-palmed against the collarbone; warm, cheerful expression with crinkled eye corners, an open genuine smile showing straight teeth, looking directly forward into the camera at the viewer.",
+    handGestures: "one hand on hip, other hand open-palmed against collarbone",
+    facialCue: "warm cheerful expression, crinkled eye corners, open genuine smile",
   },
   sad: {
     id: "sad",
     name: "Sad / Melancholic",
     category: "dramatic",
     prompt:
-      "Standing with slumped shoulders, hands loosely clasping wrists in front; sad melancholic frown, teary glistening eyes, looking slightly downward before meeting viewer's gaze, looking at viewer",
-    handGestures: "hands loosely clasping wrists in front of waist",
-    facialCue: "sad melancholic frown, teary glistening eyes",
+      "Standing with slightly slumped shoulders, arms held loosely in front with both hands clasped around the lower abdomen, fingers lightly interlocked; somber downturned mouth, furrowed inner eyebrows, heavy glistening eyelids, looking directly forward into the camera at the viewer with a vulnerable, sorrowful gaze.",
+    handGestures: "hands clasped around lower abdomen, fingers lightly interlocked",
+    facialCue: "somber downturned mouth, furrowed inner eyebrows, heavy glistening eyelids",
   },
-  surprised: {
-    id: "surprised",
-    name: "Surprised / Gasp",
+  angry: {
+    id: "angry",
+    name: "Angry / Stern",
     category: "dramatic",
     prompt:
-      "Standing upright with shoulders back, both hands open and raised near chest in sudden surprise; wide round eyes, small parted lips in a gasp, raised eyebrows, looking at viewer",
-    handGestures: "both hands open with palms raised near chest",
-    facialCue: "wide round eyes, parted lips in a gasp, raised eyebrows",
+      "Standing tall with squared shoulders, arms folded firmly across the chest, weight shifted back slightly onto one heel; sharp furrowed brow, narrowed eyelids, tight thin-pressed lips, jaw muscles subtly clenched, staring intently straight into the camera at the viewer with stern, reprimanding authority.",
+    handGestures: "arms folded firmly across chest, weight shifted back slightly",
+    facialCue: "sharp furrowed brow, narrowed eyelids, tight thin-pressed lips, clenched jaw",
+  },
+  shy: {
+    id: "shy",
+    name: "Shy / Timid",
+    category: "shy",
+    prompt:
+      "Standing with shoulders turned slightly inward, one arm crossed over the waist while the other hand gently tucks a strand of hair behind the ear; faint rosy flush across the cheeks and nose bridge, soft hesitant half-smile with closed lips, looking slightly upward directly into the camera at the viewer with a gentle, bashful gaze.",
+    handGestures: "one arm crossed over waist, other hand tucking hair behind ear",
+    facialCue: "faint rosy flush across cheeks and nose, soft hesitant half-smile, bashful gaze",
+  },
+  embarrassed: {
+    id: "embarrassed",
+    name: "Embarrassed / Flustered",
+    category: "shy",
+    prompt:
+      "Standing with a sheepish, hunched posture, one flat palm pressed against the side of a warm flushed cheek while the other hand rubs the back of the neck; pronounced rosy redness across the cheeks and ears, wide sheepish eyes, nervous tight-lipped grimace-smile, gazing directly into the camera at the viewer with an awkward, self-conscious expression.",
+    handGestures: "flat palm pressed against flushed cheek, other hand rubbing back of neck",
+    facialCue: "pronounced rosy redness on cheeks and ears, wide sheepish eyes, nervous grimace-smile",
+  },
+  smirk: {
+    id: "smirk",
+    name: "Smirk / Playful",
+    category: "happy",
+    prompt:
+      "Leaning sideways against the edge of a flat surface or desk, one hand resting on the surface behind and the other hand resting casually on the waist; head tilted slightly to one side, one eyebrow raised subtly, asymmetric wry smirk tugging one corner of the mouth upward, looking directly into the camera at the viewer with an amused, confident challenge.",
+    handGestures: "one hand resting on surface behind, other hand casually on waist",
+    facialCue: "head tilted, one eyebrow raised subtly, asymmetric wry smirk tugging one corner upward",
+  },
+  laughing: {
+    id: "laughing",
+    name: "Laughing / Mirthful",
+    category: "happy",
+    prompt:
+      "Mid-laugh with head tilted slightly back, one hand raised lightly to shield the open mouth while the other hand presses against the stomach; eyes crinkled nearly shut with delight, deep laugh creases, radiant wide open smile showing teeth mid-chuckle, directing a joyful gaze directly forward into the camera at the viewer.",
+    handGestures: "one hand raised to shield open mouth, other hand pressing against stomach",
+    facialCue: "eyes crinkled nearly shut, deep laugh creases, radiant wide open smile showing teeth",
   },
   thinking: {
     id: "thinking",
     name: "Thinking / Pondering",
     category: "neutral",
     prompt:
-      "Standing with arms loosely folded across chest, one index finger resting lightly against chin; thoughtful curious expression, focused contemplative eyes, head tilted slightly, looking at viewer",
-    handGestures: "arms folded across chest, index finger on chin",
-    facialCue: "thoughtful curious expression, contemplative eyes",
+      "Standing with arms loosely folded across the chest, one index finger resting lightly along the jawline against the cheek while the thumb supports the chin; head tilted thoughtfully to one side, one eyebrow slightly arched, contemplative focused gaze looking directly forward into the camera at the viewer.",
+    handGestures: "arms folded loosely, index finger along jawline, thumb supporting chin",
+    facialCue: "head tilted thoughtfully, one eyebrow arched, contemplative focused gaze",
   },
-  flirty: {
-    id: "flirty",
-    name: "Flirty / Seductive",
+  surprised: {
+    id: "surprised",
+    name: "Surprised / Startled",
+    category: "dramatic",
+    prompt:
+      "Standing upright with shoulders suddenly drawn back, both hands open-palmed and lifted near the chest with fingers spread slightly apart in involuntary surprise; wide round eyes, eyebrows raised high on the forehead, lips parted in a soft audible gasp, staring directly forward into the camera at the viewer with an astonished expression.",
+    handGestures: "both hands open-palmed and lifted near chest with fingers spread slightly",
+    facialCue: "wide round eyes, eyebrows raised high, lips parted in a soft audible gasp",
+  },
+  seductive: {
+    id: "seductive",
+    name: "Seductive / Alluring",
     category: "action",
     prompt:
-      "Standing with weight shifted onto one hip, one hand gently twirling a strand of hair; seductive alluring gaze, half-lidded bedroom eyes, subtle teasing smirk, looking at viewer",
-    handGestures: "one hand gently twirling a strand of hair",
-    facialCue: "seductive alluring gaze, half-lidded bedroom eyes, teasing smirk",
+      "Standing with weight shifted onto one hip, one hand lightly tracing along the collarbone while the other hand rests loosely along the outer thigh; head tilted slightly downward with a slow upward gaze through eyelashes, subtle bedroom eyes, enigmatic soft parted-lips smirk, looking directly forward into the camera at the viewer with an alluring, confident challenge.",
+    handGestures: "one hand lightly tracing collarbone, other hand loosely along outer thigh",
+    facialCue: "slow upward gaze through eyelashes, subtle bedroom eyes, soft parted-lips smirk",
   },
   waving: {
     id: "waving",
-    name: "Waving / Friendly",
+    name: "Waving / Welcoming",
     category: "happy",
     prompt:
-      "Standing upright in a friendly stance, one hand raised high waving warmly with open palm facing forward; welcoming cheerful smile, bright friendly eyes, looking at viewer",
-    handGestures: "one hand raised high waving warmly with open palm",
-    facialCue: "welcoming cheerful smile, bright friendly eyes",
+      "Standing upright in a friendly welcoming stance, one hand raised high to shoulder level waving warmly with an open forward-facing palm while the other arm rests easily at the side; bright welcoming smile showing straight upper teeth, energetic sparkling eyes, crinkled cheeks, looking directly forward into the camera at the viewer.",
+    handGestures: "one hand raised high to shoulder level waving warmly with open palm",
+    facialCue: "bright welcoming smile showing straight upper teeth, energetic sparkling eyes",
   },
   crossed_arms: {
     id: "crossed_arms",
     name: "Crossed Arms / Composed",
     category: "neutral",
     prompt:
-      "Standing tall and composed, arms folded firmly across chest; calm composed expression, direct steady eye contact, looking at viewer",
-    handGestures: "arms folded firmly across chest",
-    facialCue: "calm composed expression, direct steady eye contact",
+      "Standing tall and composed with feet shoulder-width apart, arms folded firmly across the chest with hands tucked neatly under the biceps; calm, steady, self-assured facial expression, lips relaxed in a subtle line, looking directly forward into the camera at the viewer with tranquil confidence.",
+    handGestures: "arms folded firmly across chest, hands tucked neatly under biceps",
+    facialCue: "calm steady self-assured expression, lips relaxed, tranquil confidence",
   },
   hands_on_hips: {
     id: "hands_on_hips",
     name: "Hands on Hips / Assertive",
     category: "action",
     prompt:
-      "Standing with an assertive posture, both hands placed firmly on hips, elbows flared outward; determined confident expression, bright focused eyes, looking at viewer",
-    handGestures: "both hands placed firmly on hips, elbows flared outward",
-    facialCue: "determined confident expression, bright focused eyes",
+      "Standing with an assertive upright posture, both hands placed firmly on the hips with fingers splayed over the waist and elbows flared outward; determined confident expression, bright focused eyes, chin slightly raised, looking directly forward into the camera at the viewer.",
+    handGestures: "both hands placed firmly on hips with fingers splayed, elbows flared outward",
+    facialCue: "determined confident expression, bright focused eyes, chin slightly raised",
+  },
+  relieved: {
+    id: "relieved",
+    name: "Relieved / Sighing",
+    category: "happy",
+    prompt:
+      "Standing with shoulders visibly dropping in a relaxed exhale, one flat hand placed over the center of the chest while the other arm hangs loosely at the side; soft gentle exhale through parted lips, softened eyelids, subtle warm smile of pure relief, looking directly forward into the camera at the viewer.",
+    handGestures: "one flat hand placed over center of chest, other arm hanging loosely",
+    facialCue: "soft gentle exhale through parted lips, softened eyelids, subtle warm smile of relief",
+  },
+  disgusted: {
+    id: "disgusted",
+    name: "Disgusted / Repulsed",
+    category: "dramatic",
+    prompt:
+      "Leaning the upper torso slightly backward away from the camera, one hand raised halfway in a defensive warding gesture while the other pulls inward toward the ribcage; nose wrinkled sharply, upper lip curled in clear distaste, narrowed skeptical eyes, staring directly forward into the camera at the viewer with unabashed disapproval.",
+    handGestures: "one hand raised in defensive warding gesture, other pulled toward ribcage",
+    facialCue: "nose wrinkled sharply, upper lip curled in clear distaste, narrowed skeptical eyes",
   },
 };
 
@@ -389,11 +442,12 @@ export const MODULAR_EXPRESSION_LIBRARY: Record<string, ModularExpressionPose> =
  * 1. Strict Token Order: Always list Character 1 first and Character 2 second in every prompt.
  * 2. Eliminate Positional Labels: Strictly avoid "left/right", "side A/side B" to prevent canvas splitting.
  * 3. Use Collaborative Verbs: Anchor characters together using spatial interaction.
+ * 4. Flowing Natural Prose: Seamlessly joined natural sentences.
  */
 export function buildMultiCharacterCGPrompt(options: {
   char1: { name: string; anchor: string; clothing: string };
   char2: { name: string; anchor: string; clothing: string };
-  interaction: string; // e.g. "sitting opposite across a table", "leaning head on shoulder", "embracing intimately"
+  interaction: string; // e.g. "engaged in an intense conversation while sitting opposite each other across a cafe table"
   environmentAndLighting?: string;
 }): string {
   // Sanitize interaction to strictly eliminate positional left/right labels
@@ -403,11 +457,25 @@ export function buildMultiCharacterCGPrompt(options: {
     .replace(/\s{2,}/g, " ")
     .trim();
 
-  const env =
-    options.environmentAndLighting?.trim() ||
-    "warm cinematic lighting, natural depth of field, detailed atmospheric environment";
+  const c1Anchor = cleanSentence(options.char1.anchor);
+  let c1Clothing = cleanSentence(options.char1.clothing);
+  if (!/^wearing\s+/i.test(c1Clothing)) {
+    c1Clothing = `Wearing ${c1Clothing.charAt(0).toLowerCase() + c1Clothing.slice(1)}`;
+  }
 
-  return `masterpiece, best quality, score_9, score_8, safe, @silvana, Character 1: ${options.char1.name}, ${options.char1.anchor.trim()}, wearing ${options.char1.clothing.trim()}.\nCharacter 2: ${options.char2.name}, ${options.char2.anchor.trim()}, wearing ${options.char2.clothing.trim()}.\nScene & Interaction: ${sanitizedInteraction}.\nSetting & Style: ${env}.`;
+  const c2Anchor = cleanSentence(options.char2.anchor);
+  let c2Clothing = cleanSentence(options.char2.clothing);
+  if (!/^wearing\s+/i.test(c2Clothing)) {
+    c2Clothing = `Wearing ${c2Clothing.charAt(0).toLowerCase() + c2Clothing.slice(1)}`;
+  }
+
+  const interaction = cleanSentence(sanitizedInteraction);
+  const env = cleanSentence(
+    options.environmentAndLighting ||
+      "Photorealistic two-person cinematic scene, dramatic contrast lighting, detailed atmospheric background with natural depth of field"
+  );
+
+  return `masterpiece, best quality, score_9, score_8, safe, @silvana, ${c1Anchor}. ${c1Clothing}. ${c2Anchor}. ${c2Clothing}. ${interaction}. ${env}.`;
 }
 
 /**
@@ -495,38 +563,153 @@ export async function executeAnimaSpriteGeneration(
 }
 
 /**
- * Generates an empty location background image with Anima scenery tags.
+ * Modular Location Consistency Architecture:
+ * [Camera Vantage Point] + [Base Scenery & Terrain] + [Fixed Structural Anchor] + [Fixed Landmark Composition] + [Variable Atmospheric Lighting Layer Only]
+ *
+ * Rules:
+ * 1. Flowing Natural Prose: No artificial section labels.
+ * 2. Hyper-Specific Structural Anchor: Explicitly describe any structure (e.g. rustic bamboo shelter with palm-thatch roof)
+ *    OR explicitly lock pure wilderness ("completely untouched wild nature with zero buildings, no huts, no houses").
+ * 3. Fixed Landmark Anchor: Lock spatial positions of static terrain elements (left volcanic rocks, right leaning palms, foreground driftwood).
+ * 4. Atmospheric Lighting Layer Only: The only dynamic element across Day, Evening, and Night.
+ * 5. Targeted Negative Prompting: If a rustic hut or wild nature is specified, strictly ban modern houses, luxury villas, glass, resorts, and beach bars.
+ */
+export function buildModularLocationPrompt(options: {
+  locationPrompt: string;
+  structuralAnchor?: string;
+  landmarkAnchor?: string;
+  vantagePoint?: string;
+  isInterior?: boolean;
+  timeOfDay?: "day" | "evening" | "night";
+}): { positivePrompt: string; negativePrompt: string } {
+  const timeDesc =
+    options.timeOfDay === "evening"
+      ? "sunset dusk, golden hour, warm orange and violet horizon glow, long warm cast shadows, glowing twilight sky, evening ambient illumination, golden sun sinking into the ocean horizon"
+      : options.timeOfDay === "night"
+      ? "deep night, dark indigo starlit sky, glowing full moon casting silver highlights across water and sand, soft atmospheric ambient nighttime glow, serene nocturnal atmosphere"
+      : "bright clear daytime, crisp overhead natural sunlight, vibrant azure sky, natural daylight shadows, crystal-clear water reflections, high visibility";
+
+  const segments: string[] = [];
+
+  // 1. Camera Vantage Point
+  if (options.vantagePoint?.trim()) {
+    segments.push(cleanSentence(options.vantagePoint));
+  }
+
+  // 2. Base Scenery / Terrain
+  if (options.locationPrompt?.trim()) {
+    segments.push(cleanSentence(options.locationPrompt));
+  }
+
+  // 3. Structural Anchor (Explicit Presence OR Explicit Absence)
+  if (options.structuralAnchor?.trim()) {
+    segments.push(cleanSentence(options.structuralAnchor));
+  }
+
+  // 4. Fixed Landmark & Spatial Composition
+  if (options.landmarkAnchor?.trim()) {
+    segments.push(cleanSentence(options.landmarkAnchor));
+  }
+
+  // 5. Atmospheric Lighting Layer
+  segments.push(cleanSentence(timeDesc));
+
+  // 6. Aesthetic Style (Indoor vs Outdoor)
+  if (options.isInterior) {
+    segments.push("beautiful detailed interior background, 8k wallpaper, anime background art");
+  } else {
+    segments.push("beautiful detailed landscape background, 8k wallpaper, anime background art");
+  }
+
+  const positivePrompt = `masterpiece, best quality, score_9, score_8, safe, @silvana, scenery, no humans, ${segments.join(". ")}.`;
+
+  // Dynamic Negative Prompt Construction
+  let negativePrompt =
+    "human, person, girl, boy, character, 1girl, 1boy, crowd, people, low quality, worst quality, text, watermark, signature, blurry, cropped";
+
+  const structLower = (options.structuralAnchor || "").toLowerCase();
+
+  // If untouched nature or zero buildings specified: block all structures
+  if (
+    structLower.includes("zero building") ||
+    structLower.includes("no building") ||
+    structLower.includes("no hut") ||
+    structLower.includes("no house") ||
+    structLower.includes("untouched wild") ||
+    structLower.includes("no man-made")
+  ) {
+    negativePrompt +=
+      ", house, building, architecture, hut, cabin, modern house, luxury villa, interior, indoor room, furniture, town, city, hotel, resort, beach bar, pavilion";
+  } else if (
+    structLower.includes("hut") ||
+    structLower.includes("shelter") ||
+    structLower.includes("lean-to") ||
+    structLower.includes("bamboo") ||
+    structLower.includes("rustic") ||
+    structLower.includes("cabin")
+  ) {
+    // If rustic shelter/hut: prevent morphing into modern luxury houses or commercial bars
+    negativePrompt +=
+      ", modern house, luxury villa, glass windows, modern architecture, brick building, concrete, skyscraper, city, resort, hotel, beach bar, neon signs, commercial building";
+  }
+
+  if (options.isInterior) {
+    negativePrompt += ", outdoor, sky, mountain, beach, ocean, exterior landscape";
+  } else {
+    negativePrompt += ", interior, indoor room, living room, bedroom, ceiling";
+  }
+
+  return { positivePrompt, negativePrompt };
+}
+
+/**
+ * Generates an empty location background image using the Modular Location Anchor Method.
  */
 export async function executeLocationGeneration(
   endpoint: string,
   options: {
-    locationPrompt: string;
+    location?: VNLocation;
+    locationPrompt?: string;
+    structuralAnchor?: string;
+    landmarkAnchor?: string;
+    vantagePoint?: string;
+    isInterior?: boolean;
     timeOfDay?: "day" | "evening" | "night";
     width?: number;
     height?: number;
     seed?: number;
     onProgress?: (percent: number, statusText: string) => void;
   }
-): Promise<GeneratedMedia> {
-  const timeDesc =
-    options.timeOfDay === "evening"
-      ? "sunset, golden hour warm lighting, dusk sky"
-      : options.timeOfDay === "night"
-      ? "night, starry dark sky, glowing moonlight, ambient night illumination"
-      : "daytime, bright clear natural daylight, vibrant atmosphere";
+): Promise<GeneratedMedia & { seed: number }> {
+  const seed =
+    options.seed !== undefined
+      ? options.seed
+      : options.location?.seed !== undefined
+      ? options.location.seed
+      : generateRandomSeed();
 
-  const positivePrompt = `masterpiece, best quality, score_9, score_8, safe, @silvana, scenery, no humans, ${options.locationPrompt.trim()}, ${timeDesc}, beautiful detailed background, 8k wallpaper, anime style, highly detailed interior and architecture`;
-  const negativePrompt =
-    "human, person, girl, boy, character, 1girl, 1boy, crowd, people, low quality, worst quality, text, watermark, signature";
+  const { positivePrompt, negativePrompt } = buildModularLocationPrompt({
+    locationPrompt: options.locationPrompt ?? options.location?.prompt ?? "",
+    structuralAnchor: options.structuralAnchor ?? options.location?.structuralAnchor,
+    landmarkAnchor: options.landmarkAnchor ?? options.location?.landmarkAnchor,
+    vantagePoint: options.vantagePoint ?? options.location?.vantagePoint,
+    isInterior: options.isInterior ?? options.location?.isInterior,
+    timeOfDay: options.timeOfDay,
+  });
 
-  return executeAnimaGeneration(endpoint, {
+  const media = await executeAnimaGeneration(endpoint, {
     positivePrompt,
     negativePrompt,
     width: options.width || 1216,
     height: options.height || 832, // 16:9 scenic resolution
-    seed: options.seed,
+    seed,
     onProgress: options.onProgress,
   });
+
+  return {
+    ...media,
+    seed,
+  };
 }
 
 /**

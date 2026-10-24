@@ -18,8 +18,10 @@ import {
   Layers,
   Smile,
   Shield,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
-import { VNCharacter, VNAttire, VNSpriteVariant } from "../../types/visualNovel";
+import { VNCharacter, VNAttire, VNSpriteVariant, VNTab } from "../../types/visualNovel";
 import {
   MODULAR_EXPRESSION_LIBRARY,
   buildModularSpritePrompt,
@@ -32,6 +34,7 @@ interface SpriteStudioProps {
   attires: VNAttire[];
   endpoint: string;
   onSaveCharacter: (char: VNCharacter) => void;
+  onNavigateTab?: (tab: VNTab) => void;
 }
 
 export const SpriteStudio: React.FC<SpriteStudioProps> = ({
@@ -39,6 +42,7 @@ export const SpriteStudio: React.FC<SpriteStudioProps> = ({
   attires,
   endpoint,
   onSaveCharacter,
+  onNavigateTab,
 }) => {
   const [selectedCharId, setSelectedCharId] = useState<string>(
     characters[0]?.id || ""
@@ -75,12 +79,12 @@ export const SpriteStudio: React.FC<SpriteStudioProps> = ({
       const initialAnchor =
         activeChar.characterAnchor ||
         activeChar.verbatimIdentityPrompt ||
-        "A 24-year-old woman, 5'6\" tall with a slim athletic build, sharp jawline, high cheekbones, dark almond-shaped eyes, straight shoulder-length black hair with blunt bangs";
+        "A 35-year-old woman, 168 cm tall, voluptuous curvy hourglass build with a full bust and wide hips, defined soft jawline, warm olive skin tone, dark hazel almond-shaped eyes, subtle laugh lines, and shoulder-length chestnut brown hair styled in soft waves with a neat side part";
       setCharacterAnchor(initialAnchor);
 
       const initialOutfit =
         activeChar.baselineOutfit ||
-        "Over-sized beige knit sweater and dark blue high-waisted denim jeans, clean sneakers";
+        "A tucked-in, long-sleeved silk button-up ivory blouse with mother-of-pearl buttons, paired with tailored high-waisted pleated beige wool trousers cinched with a slim brown leather belt";
       setClothingLock(initialOutfit);
 
       if (activeChar.baselineAttireId) {
@@ -89,7 +93,7 @@ export const SpriteStudio: React.FC<SpriteStudioProps> = ({
         setSelectedAttireId("");
       }
 
-      setCharacterCm(activeChar.cm || (activeChar.gender === "male" ? 178 : 165));
+      setCharacterCm(activeChar.cm || (activeChar.gender === "male" ? 178 : 168));
     }
   }, [selectedCharId, activeChar]);
 
@@ -675,6 +679,33 @@ export const SpriteStudio: React.FC<SpriteStudioProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Pipeline Navigation Footer */}
+      {onNavigateTab && (
+        <div className="flex items-center justify-between p-4 rounded-2xl bg-zinc-900 border border-zinc-800 shadow-xl mt-4">
+          <button
+            type="button"
+            onClick={() => onNavigateTab("wardrobe")}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-300 hover:text-white transition"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            <span>Step 2: Wardrobe</span>
+          </button>
+
+          <span className="text-xs text-zinc-500 font-mono hidden sm:inline">
+            Pipeline: Step 3 of 5
+          </span>
+
+          <button
+            type="button"
+            onClick={() => onNavigateTab("locations")}
+            className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-500 text-xs font-bold text-white transition shadow-md shadow-fuchsia-600/20"
+          >
+            <span>Proceed to Step 4: Worlds & Locations</span>
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };

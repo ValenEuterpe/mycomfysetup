@@ -377,36 +377,32 @@ export async function enhanceAttirePrompt(
   attireName?: string,
   options?: { gender?: "male" | "female" | "unisex"; category?: string }
 ): Promise<string> {
-  const systemPrompt = `You are an expert anime costume designer and prompt engineer for diffusion models (specifically the Anima model).
-Your task is to convert the user's clothing/attire idea into a detailed, Danbooru/tag-informed clothing prompt.
+  const systemPrompt = `You are a master costume designer and AI prompt engineer specializing in the Modular Anchor Clothing Lock method for diffusion models.
+Your task is to convert the user's clothing idea into a hyper-consistent, highly detailed Clothing Lock description.
 
-CRITICAL PURPOSE:
-This prompt will be used:
-1. To render the clothing standalone on a white headless mannequin or clothing display stand (no humans).
-2. To be injected into visual novel scene prompts when characters wear this outfit.
+GOLD STANDARD REFERENCE EXAMPLE:
+"A tucked-in, long-sleeved silk button-up ivory blouse with mother-of-pearl buttons, paired with tailored high-waisted pleated beige wool trousers cinched with a slim brown leather belt."
 
-STRICT RULES:
-1. FOCUS EXCLUSIVELY ON CLOTHING, GARMENTS, ACCESSORIES, FOOTWEAR, AND MATERIALS:
-   - Upper wear: garment type (e.g. t-shirt, collared dress shirt, hoodie, blouse, coat, jacket), collar style, sleeve length, buttons, patterns.
-   - Lower wear: pants, jeans, shorts, skirt, trousers, fit (e.g. slim-fit, cargo, pleated), belt.
-   - Footwear: sneakers, boots, sandals, loafers, dress shoes, socks.
-   - Colors & fabrics: specific shades (e.g. crimson, navy blue, beige, charcoal, olive green) and textures (e.g. denim, linen, leather, silk, velvet).
-   - Accessories: wristwatch, neckerchief, belt, tie, hat (optional).
-2. STRICT PROHIBITIONS:
-   - DO NOT include human body, anatomy, face, eyes, hair, or skin descriptions (e.g. NO "tall girl", NO "blue eyes", NO "blonde hair", NO "slender body").
-   - DO NOT include quality or meta rendering tags (e.g. NO "masterpiece", NO "realistic anime style", NO "high quality").
-   - DO NOT include static expressions or character emotions.
+STRICT SPECIFICATION REQUIREMENTS:
+Every clothing lock must explicitly detail these 5 essential layers:
+1. Upper Garment & Silhouette: Garment type (e.g. blouse, crewneck tee, sweater, dress shirt, windbreaker), sleeve length, fit/tuck style (e.g. tucked-in, oversized, fitted, French-tucked), collar style.
+2. Fabric Materials & Textures: Specify real fabrics (e.g. silk, wool, linen, raw-denim, combed cotton, velvet, corduroy, leather).
+3. Exact Hardware & Fasteners: Specific notions (e.g. mother-of-pearl buttons, brass buckle, copper rivets, covered placket, gold epaulets, heavy-duty zippers).
+4. Lower Garment & Tailoring: Garment cut (e.g. tailored high-waisted pleated wool trousers, straight-leg raw denim jeans, A-line pencil skirt), waistband details.
+5. Accessories & Footwear: Belts (e.g. slim brown leather belt, braided tan leather belt), footwear (e.g. oxfords, low-profile sneakers, pumps, boots).
+6. Nuanced Colors: Never use generic words like "colorful". Use exact shades (e.g. ivory, beige, dark indigo, charcoal-grey, emerald-green, pastel-yellow).
 
-FORMAT:
-Output ONLY the comma-separated descriptive clothing tags and phrases.
-No explanations, no markdown codeblocks, no extra commentary.`;
+STRICT PROHIBITIONS:
+- DO NOT mention human body parts, skin tone, hair, facial features, or build (e.g. NO "pretty woman", NO "blue eyes", NO "slender body").
+- DO NOT include camera styles or quality buzzwords (e.g. NO "masterpiece", NO "8k", NO "photorealistic").
+- DO NOT output bullet points or labels like "Upper:" or "Lower:". Output one cohesive, detailed descriptive sentence.`;
 
   let userMsg = `Attire Name: ${attireName || "Custom Attire"}
 Category: ${options?.category || "casual"}
 Gender: ${options?.gender || "unisex"}
-User's clothing description: ${userPrompt}
+User's rough clothing idea: ${userPrompt}
 
-Generate the detailed clothing prompt:`;
+Generate the detailed Modular Anchor Clothing Lock description:`;
 
   const responseText = await callLlmChat(
     [
@@ -422,6 +418,7 @@ Generate the detailed clothing prompt:`;
     .replace(/\b(realistic\s+)?anime\s+style\b/gi, "")
     .replace(/\b(high|best)\s+quality\b/gi, "")
     .replace(/\bmasterpiece\b/gi, "")
+    .replace(/^["']|["']$/g, "")
     .trim();
 
   return cleaned;

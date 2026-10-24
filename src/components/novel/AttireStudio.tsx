@@ -14,8 +14,10 @@ import {
   Filter,
   CheckCircle2,
   Info,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
-import { VNAttire, VNCharacter } from "../../types/visualNovel";
+import { VNAttire, VNCharacter, VNTab } from "../../types/visualNovel";
 import { enhanceAttirePrompt } from "../../lib/llmClient";
 import { generateAttirePreview } from "../../lib/visualNovelEngine";
 import { saveMediaToLocalCache } from "../../lib/mediaCache";
@@ -27,6 +29,7 @@ interface AttireStudioProps {
   characters: VNCharacter[];
   onAssignToCharacter?: (charId: string, attire: VNAttire) => void;
   endpoint: string;
+  onNavigateTab?: (tab: VNTab) => void;
 }
 
 export const AttireStudio: React.FC<AttireStudioProps> = ({
@@ -36,6 +39,7 @@ export const AttireStudio: React.FC<AttireStudioProps> = ({
   characters,
   onAssignToCharacter,
   endpoint,
+  onNavigateTab,
 }) => {
   // New Attire Form
   const [name, setName] = useState("");
@@ -296,9 +300,19 @@ export const AttireStudio: React.FC<AttireStudioProps> = ({
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="e.g. Red velvet pirate longcoat with gold embroidery, white poet shirt, dark trousers, knee-high leather boots..."
+              placeholder="e.g. A tucked-in, long-sleeved silk button-up ivory blouse with mother-of-pearl buttons, paired with tailored high-waisted pleated beige wool trousers cinched with a slim brown leather belt..."
               className="w-full bg-zinc-950 border border-zinc-800 focus:border-fuchsia-500 rounded-xl p-3 text-xs sm:text-sm text-zinc-100 placeholder:text-zinc-600 transition-colors resize-none shadow-inner"
             />
+            <div className="flex items-center gap-1.5 flex-wrap pt-1 text-[10px] text-zinc-500">
+              <span className="font-semibold text-zinc-400">Lock Anchors:</span>
+              <span className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800">Garment & Fit (Tuck)</span>
+              <span>•</span>
+              <span className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800">Fabrics (Silk, Wool, Denim)</span>
+              <span>•</span>
+              <span className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800">Hardware (Buttons, Buckles)</span>
+              <span>•</span>
+              <span className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800">Footwear & Belt</span>
+            </div>
           </div>
 
           {/* Verbatim Anima Prompt (Editable) */}
@@ -590,6 +604,33 @@ export const AttireStudio: React.FC<AttireStudioProps> = ({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Pipeline Navigation Footer */}
+      {onNavigateTab && (
+        <div className="flex items-center justify-between p-4 rounded-2xl bg-zinc-900 border border-zinc-800 shadow-xl mt-4">
+          <button
+            type="button"
+            onClick={() => onNavigateTab("characters")}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-300 hover:text-white transition"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            <span>Step 1: Cast</span>
+          </button>
+
+          <span className="text-xs text-zinc-500 font-mono hidden sm:inline">
+            Pipeline: Step 2 of 5
+          </span>
+
+          <button
+            type="button"
+            onClick={() => onNavigateTab("sprites")}
+            className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-500 text-xs font-bold text-white transition shadow-md shadow-fuchsia-600/20"
+          >
+            <span>Proceed to Step 3: Sprites & Emotions</span>
+            <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
       )}
     </div>

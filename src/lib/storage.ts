@@ -243,104 +243,136 @@ export function deleteVNStory(id: string): void {
 
 export const DEFAULT_BASELINE_ATTIRES: VNAttire[] = [
   {
-    id: "preset_casual_male",
-    name: "Civilian Flight Casual (Male)",
-    gender: "male",
-    category: "travel",
-    verbatimPrompt: "crisp grey crewneck t-shirt, dark indigo denim jeans, white canvas sneakers, brown leather watch",
-    userDescription: "Standard comfortable traveler clothing for men",
+    id: "preset_silk_blouse_trousers",
+    name: "Silk Blouse & Pleated Wool Trousers (Female)",
+    gender: "female",
+    category: "formal",
+    verbatimPrompt:
+      "a tucked-in, long-sleeved silk button-up ivory blouse with mother-of-pearl buttons, paired with tailored high-waisted pleated beige wool trousers cinched with a slim brown leather belt",
+    userDescription: "Master-consistency tailored ivory silk blouse and pleated wool trousers",
     isPreset: true,
     createdAt: 1700000000000,
   },
   {
-    id: "preset_casual_female",
-    name: "Civilian Flight Casual (Female)",
+    id: "preset_knit_denim_female",
+    name: "Oversized Cable Knit & High-Waist Denim (Female)",
     gender: "female",
-    category: "travel",
-    verbatimPrompt: "light blue linen button-up blouse, dark navy tailored trousers, comfortable white slip-on sneakers",
-    userDescription: "Smart casual traveler attire for women",
+    category: "casual",
+    verbatimPrompt:
+      "an over-sized beige chunky-knit sweater with ribbed cuffs and hem, paired with dark blue high-waisted denim jeans with copper rivets, cinched with a tan leather belt, finished with brown ankle boots",
+    userDescription: "Cozy oversized knit sweater with dark denim jeans",
     isPreset: true,
     createdAt: 1700000000001,
   },
   {
-    id: "preset_summer_male",
-    name: "Summer Vacationer (Male)",
-    gender: "male",
-    category: "casual",
-    verbatimPrompt: "short-sleeve tropical floral shirt, khaki chino shorts, brown leather boat shoes, woven wristband",
-    userDescription: "Relaxed tropical vacation outfit",
+    id: "preset_casual_female",
+    name: "Linen Blouse & Tailored Chino Trousers (Female)",
+    gender: "female",
+    category: "travel",
+    verbatimPrompt:
+      "a tucked-in, relaxed-fit light blue linen button-up blouse with white resin buttons and rolled sleeves, paired with dark navy tailored high-waisted cotton-twill ankle trousers cinched with a braided tan leather belt, finished with low-profile white canvas slip-on sneakers",
+    userDescription: "Smart casual traveler attire with linen texture and tailored fit",
     isPreset: true,
     createdAt: 1700000000002,
   },
   {
-    id: "preset_summer_female",
-    name: "Summer Vacationer (Female)",
-    gender: "female",
-    category: "casual",
-    verbatimPrompt: "lightweight yellow floral sundress with thin straps, straw sunhat, tan leather sandals",
-    userDescription: "Breezy sunny day sundress",
+    id: "preset_casual_male",
+    name: "Combed-Cotton Crewneck & Raw Denim (Male)",
+    gender: "male",
+    category: "travel",
+    verbatimPrompt:
+      "a fitted heather-grey combed-cotton crewneck t-shirt with ribbed collar, paired with dark indigo raw-denim straight-leg jeans with bronze rivets, cinched with a distressed brown leather belt with brass buckle, finished with minimalist white leather sneakers",
+    userDescription: "High-detail casual wardrobe with denim rivets and leather belt",
     isPreset: true,
     createdAt: 1700000000003,
   },
   {
-    id: "preset_office_male",
-    name: "Office Executive (Male)",
-    gender: "male",
-    category: "formal",
-    verbatimPrompt: "crisp light blue dress shirt, dark charcoal wool slacks, black leather dress belt, polished oxford shoes",
-    userDescription: "Professional business wear for men",
+    id: "preset_summer_female",
+    name: "Floral Linen Sundress & Woven Sunhat (Female)",
+    gender: "female",
+    category: "casual",
+    verbatimPrompt:
+      "a fitted pastel-yellow floral-print linen A-line sundress with delicate thin shoulder straps and a sweetheart neckline, cinched at the natural waist with a matching fabric sash, accessorized with a wide-brim woven straw sunhat and tan leather strap sandals",
+    userDescription: "Summer sundress with specific linen weave, sash tie, and sandals",
     isPreset: true,
     createdAt: 1700000000004,
   },
   {
-    id: "preset_office_female",
-    name: "Office Professional (Female)",
-    gender: "female",
-    category: "formal",
-    verbatimPrompt: "silk emerald green button-up blouse, high-waisted beige pencil skirt, black low-heel pumps",
-    userDescription: "Tailored professional attire for women",
+    id: "preset_summer_male",
+    name: "Resort Camp-Collar Shirt & Chino Shorts (Male)",
+    gender: "male",
+    category: "casual",
+    verbatimPrompt:
+      "a short-sleeved botanical-print rayon camp-collar resort shirt with coconut shell buttons, paired with tailored khaki cotton-twill chino shorts with slanted side pockets, cinched with a braided dark brown leather belt, finished with tan suede boat shoes",
+    userDescription: "Tropical vacation resort shirt with coconut buttons and chino shorts",
     isPreset: true,
     createdAt: 1700000000005,
   },
   {
-    id: "preset_explorer_unisex",
-    name: "Island Explorer (Unisex)",
-    gender: "unisex",
-    category: "adventure",
-    verbatimPrompt: "olive green zippered utility windbreaker, rugged dark cargo pants with pockets, durable waterproof hiking boots",
-    userDescription: "Durable survival and outdoor exploration gear",
+    id: "preset_office_female",
+    name: "Silk Crepe Blouse & Houndstooth Skirt (Female)",
+    gender: "female",
+    category: "formal",
+    verbatimPrompt:
+      "a tailored emerald-green silk crepe button-up blouse with a covered hidden placket and French cuffs, tucked into a high-waisted charcoal-grey wool houndstooth pencil skirt with back vent, cinched with a narrow black patent-leather belt with gold buckle, finished with pointed-toe black leather low-heel pumps",
+    userDescription: "Executive professional attire with french cuffs and houndstooth weave",
     isPreset: true,
     createdAt: 1700000000006,
   },
   {
-    id: "preset_pilot_male",
-    name: "Airline Captain Uniform (Male)",
+    id: "preset_office_male",
+    name: "Egyptian Cotton Dress Shirt & Wool Slacks (Male)",
     gender: "male",
-    category: "uniform",
-    verbatimPrompt: "crisp white short-sleeve pilot shirt with gold four-stripe epaulets, dark navy formal flight trousers, black leather dress shoes",
-    userDescription: "Commercial aviation captain uniform",
+    category: "formal",
+    verbatimPrompt:
+      "a crisp tailored sky-blue Egyptian cotton dress shirt with spread collar and mother-of-pearl buttons, tucked into tailored charcoal-grey wool-flannel dress trousers with sharp front creases, cinched with a polished black leather dress belt with silver buckle, finished with dark brown leather cap-toe oxford shoes",
+    userDescription: "Bespoke executive business wear with sharp creases and oxford shoes",
     isPreset: true,
     createdAt: 1700000000007,
   },
   {
-    id: "preset_attendant_female",
-    name: "Flight Attendant Uniform (Female)",
-    gender: "female",
-    category: "uniform",
-    verbatimPrompt: "tailored royal blue flight attendant uniform dress with white lapel collar, red silk neckerchief, black leather pumps",
-    userDescription: "Classic commercial airline crew uniform",
+    id: "preset_explorer_unisex",
+    name: "Ripstop Utility Windbreaker & Cargo Pants (Unisex)",
+    gender: "unisex",
+    category: "adventure",
+    verbatimPrompt:
+      "a weather-resistant olive-green ripstop utility windbreaker with brass zippers and cargo chest pockets, worn over a charcoal dry-fit undershirt, paired with rugged dark khaki cargo pants with reinforced knee seams and zippered pockets, cinched with a heavy-duty nylon webbing utility belt, finished with durable waterproof leather hiking boots with Vibram lug soles",
+    userDescription: "Durable tactical survival and outdoor expedition gear",
     isPreset: true,
     createdAt: 1700000000008,
   },
   {
-    id: "preset_athletic_unisex",
-    name: "Athletic Sportswear (Unisex)",
-    gender: "unisex",
-    category: "casual",
-    verbatimPrompt: "breathable black dry-fit athletic hoodie, grey tapered sweatpants, modern running sneakers",
-    userDescription: "Modern activewear and sportswear",
+    id: "preset_pilot_male",
+    name: "Aviation Captain Uniform (Male)",
+    gender: "male",
+    category: "uniform",
+    verbatimPrompt:
+      "a crisp white short-sleeved aviation pilot shirt with dual pleated chest pockets and gold four-stripe shoulder epaulets, tucked into tailored dark navy gabardine wool flight trousers with a sharp crease, cinched with a formal black leather belt with gold buckle, finished with polished high-shine black leather dress shoes",
+    userDescription: "Commercial aviation captain uniform with gold epaulets and gabardine wool",
     isPreset: true,
     createdAt: 1700000000009,
+  },
+  {
+    id: "preset_attendant_female",
+    name: "Flight Attendant Wool Uniform Dress (Female)",
+    gender: "female",
+    category: "uniform",
+    verbatimPrompt:
+      "a tailored royal-blue wool-crepe uniform dress with asymmetrical white lapels and gold-trimmed cuff buttons, accented with a vibrant red silk neckerchief tied neatly in a side knot, cinched at the natural waist with a matching blue fabric belt, paired with black leather court pumps",
+    userDescription: "Classic commercial airline crew uniform with silk neckerchief",
+    isPreset: true,
+    createdAt: 1700000000010,
+  },
+  {
+    id: "preset_athletic_unisex",
+    name: "Technical Dry-Fit Hoodie & Fleece Joggers (Unisex)",
+    gender: "unisex",
+    category: "casual",
+    verbatimPrompt:
+      "a fitted matte-black technical dry-fit athletic zip hoodie with raglan sleeves and thumbholes, paired with charcoal tapered fleece jogger sweatpants with zippered hip pockets and an elastic drawstring waist, finished with modern breathable mesh running sneakers with white soles",
+    userDescription: "Modern activewear with technical fabric textures and raglan seams",
+    isPreset: true,
+    createdAt: 1700000000011,
   },
 ];
 
@@ -423,22 +455,46 @@ export const DEFAULT_WORLDS: VNWorld[] = [
       {
         id: "loc_sandy_beach",
         name: "Sandy Coastline",
-        description: "White sandy beach with turquoise ocean waves and leaning palm trees",
-        prompt: "pristine sandy beach, turquoise tropical ocean waves crashing on shore, leaning palm trees, driftwood on wet sand",
+        description: "White sandy shore with a small bamboo shelter, leaning palm trees, and coastal rocks",
+        prompt: "pristine sandy beach shoreline meeting rolling turquoise ocean surf waves",
+        structuralAnchor:
+          "a single small weathered open-air bamboo shelter with rough wooden stilt posts and a shaggy dried palm-thatch roof situated on the far right sand dunes",
+        landmarkAnchor:
+          "three tall leaning coconut palm trees clustered on the far right sand dunes behind the shelter, dark jagged volcanic rocks jutting into the surf on the left coastline, weathered gray driftwood logs and smooth sea pebbles resting on the damp packed sand in the immediate foreground",
+        vantagePoint:
+          "fixed wide-angle eye-level landscape shot from the dry sandy shoreline looking across the beach toward the turquoise ocean waves",
+        isInterior: false,
+        seed: 482910481,
         timeVariants: {},
       },
       {
         id: "loc_jungle_camp",
         name: "Survivor Jungle Camp",
-        description: "Rustic makeshift survival shelter surrounded by lush bamboo and tropical vegetation",
-        prompt: "rustic makeshift survival campsite, bamboo tent shelter, campfire with stones, surrounded by dense tropical rainforest ferns and palm leaves",
+        description: "Makeshift survival shelter with a stone campfire ring in a lush rainforest clearing",
+        prompt: "dense tropical jungle clearing surrounded by ancient mossy banyan trees and giant broadleaf ferns",
+        structuralAnchor:
+          "a single small A-frame survival lean-to shelter made of tied bamboo poles and woven green palm fronds on the left side of the clearing",
+        landmarkAnchor:
+          "a circular stone-lined campfire pit with weathered gray river stones and smoldering blackened charcoal in the center foreground, tall bamboo thickets framing the background, hanging jungle vines draping down from canopy trees",
+        vantagePoint:
+          "fixed medium-wide eye-level perspective centered on the jungle clearing and campfire",
+        isInterior: false,
+        seed: 719302845,
         timeVariants: {},
       },
       {
         id: "loc_cliff_overlook",
         name: "Ocean Cliff Overlook",
-        description: "Dramatic rocky cliff looking over the vast open ocean and distant horizon",
-        prompt: "high rocky coastal cliff edge overlooking the endless azure sea, ocean horizon, rugged stone plateau",
+        description: "Untouched rocky coastal cliff overlooking the vast open ocean horizon",
+        prompt: "dramatic high coastal cliff plateau overlooking the endless deep azure sea",
+        structuralAnchor:
+          "completely untouched wild nature with zero buildings, no huts, no houses, no man-made structures",
+        landmarkAnchor:
+          "craggy dark basalt rock ledge extending toward the edge on the right, wild coastal grass and hardy blooming purple sea lavender clinging to rock crevices, distant ocean horizon meeting the sky",
+        vantagePoint:
+          "fixed wide-angle landscape vista shot standing on the rocky plateau looking out toward the ocean horizon",
+        isInterior: false,
+        seed: 938102476,
         timeVariants: {},
       },
     ],
@@ -450,7 +506,29 @@ export function loadVNWorlds(): VNWorld[] {
     const raw = localStorage.getItem(STORAGE_KEYS.VN_WORLDS);
     if (!raw) return DEFAULT_WORLDS;
     const worlds: VNWorld[] = JSON.parse(raw);
-    return worlds.length > 0 ? worlds : DEFAULT_WORLDS;
+    if (!Array.isArray(worlds) || worlds.length === 0) return DEFAULT_WORLDS;
+
+    // Backfill defaults if user has older stored default locations missing structural anchors
+    return worlds.map((w) => {
+      const defaultW = DEFAULT_WORLDS.find((dw) => dw.id === w.id);
+      if (!defaultW) return w;
+      return {
+        ...w,
+        locations: w.locations.map((loc) => {
+          const defaultLoc = defaultW.locations.find((dl) => dl.id === loc.id);
+          if (!defaultLoc) return loc;
+          return {
+            ...defaultLoc,
+            ...loc,
+            structuralAnchor: loc.structuralAnchor || defaultLoc.structuralAnchor,
+            landmarkAnchor: loc.landmarkAnchor || defaultLoc.landmarkAnchor,
+            vantagePoint: loc.vantagePoint || defaultLoc.vantagePoint,
+            isInterior: loc.isInterior !== undefined ? loc.isInterior : defaultLoc.isInterior,
+            seed: loc.seed !== undefined ? loc.seed : defaultLoc.seed,
+          };
+        }),
+      };
+    });
   } catch {
     return DEFAULT_WORLDS;
   }

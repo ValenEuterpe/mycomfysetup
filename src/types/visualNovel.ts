@@ -55,6 +55,16 @@ export interface VNLocation {
   name: string;
   description: string;
   prompt: string;
+  /** Explicit structural anchor (e.g. exact type of hut/building or 'zero buildings') */
+  structuralAnchor?: string;
+  /** Fixed landmarks & spatial composition (e.g. left rocks, right trees, foreground driftwood) */
+  landmarkAnchor?: string;
+  /** Camera vantage point (e.g. fixed wide-angle shot from the shore) */
+  vantagePoint?: string;
+  /** Whether the location is an interior room */
+  isInterior?: boolean;
+  /** Base seed to lock procedural terrain geometry across times of day */
+  seed?: number;
   timeVariants: {
     day?: string;
     evening?: string;
