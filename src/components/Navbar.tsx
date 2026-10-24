@@ -16,6 +16,8 @@ import {
   BookOpen,
   FileText,
   Shirt,
+  Smile,
+  Compass,
 } from "lucide-react";
 import { ComfyConnectionTestResult } from "../lib/comfyClient";
 import { VNTab } from "../types/visualNovel";
@@ -150,7 +152,31 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }`}
               >
                 <Shirt className="w-3.5 h-3.5" />
-                <span>2. Wardrobe{vnAttireCount !== undefined ? ` (${vnAttireCount})` : ""}</span>
+                <span>2. Clothes{vnAttireCount !== undefined ? ` (${vnAttireCount})` : ""}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onVnTabChange("sprites")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  vnTab === "sprites"
+                    ? "bg-fuchsia-600 text-white shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-100"
+                }`}
+              >
+                <Smile className="w-3.5 h-3.5" />
+                <span>3. Sprites</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onVnTabChange("locations")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  vnTab === "locations"
+                    ? "bg-fuchsia-600 text-white shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-100"
+                }`}
+              >
+                <Compass className="w-3.5 h-3.5" />
+                <span>4. Worlds</span>
               </button>
               <button
                 type="button"
@@ -162,7 +188,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }`}
               >
                 <Layers className="w-3.5 h-3.5" />
-                <span>3. Story</span>
+                <span>5. Story</span>
               </button>
               <button
                 type="button"
@@ -175,7 +201,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }`}
               >
                 <BookOpen className="w-3.5 h-3.5" />
-                <span>4. Play Novel{vnSceneCount ? ` (${vnSceneCount})` : ""}</span>
+                <span>6. Play Novel{vnSceneCount ? ` (${vnSceneCount})` : ""}</span>
               </button>
               <button
                 type="button"
@@ -187,7 +213,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }`}
               >
                 <FileText className="w-3.5 h-3.5" />
-                <span>5. Ledger</span>
+                <span>7. Ledger</span>
               </button>
             </div>
           )}
@@ -373,6 +399,28 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
           <button
             type="button"
+            onClick={() => onVnTabChange("sprites")}
+            className={`flex-1 min-w-[55px] py-1.5 px-1.5 rounded-lg text-[11px] font-semibold text-center transition-colors truncate ${
+              vnTab === "sprites"
+                ? "bg-fuchsia-600 text-white shadow-sm"
+                : "text-zinc-400 bg-zinc-900/60"
+            }`}
+          >
+            3. Sprites
+          </button>
+          <button
+            type="button"
+            onClick={() => onVnTabChange("locations")}
+            className={`flex-1 min-w-[55px] py-1.5 px-1.5 rounded-lg text-[11px] font-semibold text-center transition-colors truncate ${
+              vnTab === "locations"
+                ? "bg-fuchsia-600 text-white shadow-sm"
+                : "text-zinc-400 bg-zinc-900/60"
+            }`}
+          >
+            4. Worlds
+          </button>
+          <button
+            type="button"
             onClick={() => onVnTabChange("story")}
             className={`flex-1 min-w-[55px] py-1.5 px-1.5 rounded-lg text-[11px] font-semibold text-center transition-colors truncate ${
               vnTab === "story"
@@ -380,7 +428,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 : "text-zinc-400 bg-zinc-900/60"
             }`}
           >
-            3. Story
+            5. Story
           </button>
           <button
             type="button"
@@ -392,7 +440,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 : "text-zinc-400 bg-zinc-900/60"
             }`}
           >
-            4. Play{vnSceneCount ? ` (${vnSceneCount})` : ""}
+            6. Play{vnSceneCount ? ` (${vnSceneCount})` : ""}
           </button>
           <button
             type="button"
@@ -403,7 +451,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 : "text-zinc-400 bg-zinc-900/60"
             }`}
           >
-            5. Log
+            7. Log
           </button>
         </div>
       )}

@@ -12,6 +12,19 @@ export interface VNAttire {
   createdAt: number;
 }
 
+export interface VNSpriteVariant {
+  id: string;
+  characterId: string;
+  outfitId: string;
+  poseId: string;
+  emotionId: string;
+  imageUrl: string;
+  mediaId?: string;
+  outlineWidth: number; // 0 for clean alpha cutout, 2 for sticker white border
+  seed?: number;
+  createdAt: number;
+}
+
 export interface VNCharacter {
   id: string;
   name: string;
@@ -24,9 +37,35 @@ export interface VNCharacter {
   faceShape?: string;
   /** Exact verbatim prompt describing bodily and facial proportions, hair, eyes, etc. */
   verbatimIdentityPrompt: string;
+  /** Immutable anatomical anchor (measurable traits: jawline, cheekbones, eyes, exact hair, height/build) */
+  characterAnchor?: string;
+  /** Clothing locks keyed by outfit name/id */
+  clothingLocks?: Record<string, string>;
+  /** Height in centimeters for proportional stage scaling (e.g. 165) */
+  cm?: number;
+  /** Generated transparent sprite cutouts keyed by `${outfitId}_${emotionId}` */
+  sprites?: Record<string, VNSpriteVariant>;
   avatarUrl?: string;
   mediaId?: string;
   createdAt: number;
+}
+
+export interface VNLocation {
+  id: string;
+  name: string;
+  description: string;
+  prompt: string;
+  timeVariants: {
+    day?: string;
+    evening?: string;
+    night?: string;
+  };
+}
+
+export interface VNWorld {
+  id: string;
+  title: string;
+  locations: VNLocation[];
 }
 
 export interface VNDialogueLine {
@@ -44,11 +83,28 @@ export interface VNCharacterSceneState {
   pose: string; // e.g. "sitting on wet sand, gesturing with hand"
 }
 
+export interface VNActiveSpriteOnStage {
+  characterId: string;
+  outfitId?: string;
+  poseId?: string;
+  emotionId?: string;
+  spriteUrl?: string;
+  position?: number; // Normalized x-position on stage: 0.2 (left), 0.5 (center), 0.8 (right)
+  isSpeaking?: boolean;
+}
+
 export interface VNScene {
   id: string;
   sceneNumber: number;
   title: string;
   sceneTone?: string; // e.g. "crisis", "survival_dialogue", "quiet_moment", "discovery"
+  sceneType?: "layered" | "cg"; // "layered" (background + cutouts) or "cg" (full event illustration)
+  backgroundUrl?: string;
+  worldId?: string;
+  locationId?: string;
+  timeOfDay?: "day" | "evening" | "night";
+  activeSprites?: VNActiveSpriteOnStage[];
+  cgUrl?: string;
   charactersPresent: string[]; // Character names (max 3)
   characterStates?: VNCharacterSceneState[];
   /** Composed Anima prompt including verbatim character identities + environment + action */
@@ -74,7 +130,7 @@ export interface VNStory {
   updatedAt: number;
 }
 
-export type VNTab = "characters" | "wardrobe" | "story" | "reader" | "ledger";
+export type VNTab = "characters" | "wardrobe" | "sprites" | "locations" | "story" | "reader" | "ledger";
 
 export interface LlmConfig {
   baseUrl: string;

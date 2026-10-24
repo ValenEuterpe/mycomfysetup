@@ -20,10 +20,16 @@ import {
   Cloud,
   FileText,
   Shirt,
+  Smile,
+  Compass,
+  MapPin,
+  Sliders,
 } from "lucide-react";
-import { VNCharacter, VNScene, VNStory, VNTab, VNAttire } from "../types/visualNovel";
+import { VNCharacter, VNScene, VNStory, VNTab, VNAttire, VNWorld } from "../types/visualNovel";
 import { StoryLedger } from "../components/novel/StoryLedger";
 import { AttireStudio } from "../components/novel/AttireStudio";
+import { SpriteStudio } from "../components/novel/SpriteStudio";
+import { WorldStudio } from "../components/novel/WorldStudio";
 import {
   loadVNCharacters,
   saveVNCharacter,
@@ -35,6 +41,9 @@ import {
   saveVNAttire,
   deleteVNAttire,
   fetchAttiresFromKV,
+  loadVNWorlds,
+  saveVNWorld,
+  deleteVNWorld,
 } from "../lib/storage";
 import {
   enhanceCharacterPrompt,
@@ -103,6 +112,26 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
 
   // Attire Studio State
   const [attires, setAttires] = useState<VNAttire[]>(loadVNAttires);
+
+  // World & Location State
+  const [worlds, setWorlds] = useState<VNWorld[]>(loadVNWorlds);
+  const [stageBgOverride, setStageBgOverride] = useState<string>("");
+  const [stageMode, setStageMode] = useState<"layered" | "cg">("layered");
+
+  const handleSaveWorld = (world: VNWorld) => {
+    saveVNWorld(world);
+    setWorlds(loadVNWorlds());
+  };
+
+  const handleDeleteWorld = (id: string) => {
+    deleteVNWorld(id);
+    setWorlds(loadVNWorlds());
+  };
+
+  const handleSaveCharacterFromStudio = (updatedChar: VNCharacter) => {
+    saveVNCharacter(updatedChar);
+    setCharacters(loadVNCharacters());
+  };
 
   // Story & Generation State
   const [storyPremise, setStoryPremise] = useState(
@@ -554,6 +583,46 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
   const speakerChar = characters.find(
     (c) => c.name.toLowerCase() === currentDialogue?.speaker?.toLowerCase()
   );
+
+  // Helper for Reader emotion parsing from dialogue voice cues
+  const parseEmotionFromCue = (cue: string = ""): string => {
+    const c = cue.toLowerCase();
+    if (c.includes("shy") || c.includes("blush") || c.includes("bashful") || c.includes("hesitant")) return "shy";
+    if (c.includes("happy") || c.includes("smile") || c.includes("cheer")) return "happy";
+    if (c.includes("laugh") || c.includes("giggle") || c.includes("chuckle")) return "laughing";
+    if (c.includes("angry") || c.includes("shout") || c.includes("furious") || c.includes("stern") || c.includes("aggressive")) return "angry";
+    if (c.includes("smug") || c.includes("grin") || c.includes("confident")) return "smug";
+    if (c.includes("sad") || c.includes("cry") || c.includes("tear") || c.includes("sorrow")) return "sad";
+    if (c.includes("surpris") || c.includes("gasp") || c.includes("shock")) return "surprised";
+    if (c.includes("think") || c.includes("ponder") || c.includes("curious")) return "thinking";
+    if (c.includes("flirt") || c.includes("seduct") || c.includes("allur")) return "flirty";
+    if (c.includes("wave") || c.includes("greet")) return "waving";
+    if (c.includes("cross")) return "crossed_arms";
+    if (c.includes("hip")) return "hands_on_hips";
+    return "neutral";
+  };
+
+  const sceneCharacters = (currentScene?.charactersPresent || [])
+    .map((name) => characters.find((c) => c.name.toLowerCase() === name.toLowerCase()))
+    .filter((c): c is VNCharacter => !!c);
+
+  const displayCharacters = sceneCharacters.length > 0 ? sceneCharacters : activeCharacters;
+
+  const availableBackgrounds = worlds.flatMap((w) =>
+    w.locations.flatMap((l) => [
+      ...(l.timeVariants.day ? [{ label: `${l.name} (Day)`, url: l.timeVariants.day }] : []),
+      ...(l.timeVariants.evening ? [{ label: `${l.name} (Evening)`, url: l.timeVariants.evening }] : []),
+      ...(l.timeVariants.night ? [{ label: `${l.name} (Night)`, url: l.timeVariants.night }] : []),
+    ])
+  );
+
+  const activeBgUrl =
+    stageBgOverride ||
+    currentScene?.backgroundUrl ||
+    worlds[0]?.locations[0]?.timeVariants?.day ||
+    worlds[0]?.locations[0]?.timeVariants?.evening ||
+    worlds[0]?.locations[0]?.timeVariants?.night ||
+    "";
 
   return (
     <div className="flex-1 flex flex-col bg-zinc-950 text-zinc-100 min-h-screen">
@@ -1045,6 +1114,30 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
         )}
 
         {/* ========================================================================= */}
+        {/* TAB 3: SPRITE STUDIO & MODULAR EMOTIONS (Anima + RMBG-2.0 Cutouts) */}
+        {/* ========================================================================= */}
+        {activeTab === "sprites" && (
+          <SpriteStudio
+            characters={characters}
+            attires={attires}
+            endpoint={endpoint}
+            onSaveCharacter={handleSaveCharacterFromStudio}
+          />
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 4: WORLD & LOCATION STUDIO (Pure Scenery & Time Variants) */}
+        {/* ========================================================================= */}
+        {activeTab === "locations" && (
+          <WorldStudio
+            worlds={worlds}
+            onSaveWorld={handleSaveWorld}
+            onDeleteWorld={handleDeleteWorld}
+            endpoint={endpoint}
+          />
+        )}
+
+        {/* ========================================================================= */}
         {/* TAB 2: STORY & SCENES (Step 3, 4, 5) */}
         {/* ========================================================================= */}
         {activeTab === "story" && (
@@ -1311,55 +1404,103 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
         {/* ========================================================================= */}
         {activeTab === "reader" && (
           <div className="flex flex-col gap-4 max-w-5xl mx-auto w-full">
-            {/* Cinematic Stage Box (Pure Artwork Viewport) */}
+            {/* Cinematic Stage Box (Modular Layered Stage & CG Viewport) */}
             <div className="relative w-full aspect-[16/9] bg-black rounded-2xl sm:rounded-3xl overflow-hidden border border-zinc-800 shadow-2xl flex flex-col justify-between select-none">
-              {/* Scene Background Image */}
-              {currentScene?.imageUrl ? (
+              {/* LAYER 1: Background Scenery (or CG full-bleed) */}
+              {stageMode === "cg" && currentScene?.imageUrl ? (
                 <img
                   src={currentScene.imageUrl}
                   alt={currentScene.title}
-                  className="absolute inset-0 w-full h-full object-cover transition-opacity duration-500"
+                  className="absolute inset-0 w-full h-full object-cover transition-opacity duration-500 z-0"
+                />
+              ) : activeBgUrl ? (
+                <img
+                  src={activeBgUrl}
+                  alt="Stage Background"
+                  className="absolute inset-0 w-full h-full object-cover transition-opacity duration-500 z-0"
                 />
               ) : (
-                <div className="absolute inset-0 bg-gradient-to-b from-zinc-900 to-zinc-950 flex flex-col items-center justify-center p-6 text-center">
-                  {currentScene?.isGenerating ? (
-                    <div className="flex flex-col items-center gap-3">
-                      <Loader2 className="w-10 h-10 animate-spin text-fuchsia-400" />
-                      <span className="text-sm font-semibold text-fuchsia-300">
-                        {currentScene.statusText || "Rendering Anima scene..."}
-                      </span>
-                      {currentScene.progressPercent !== undefined && (
-                        <div className="w-48 h-2 bg-zinc-800 rounded-full overflow-hidden mt-1">
-                          <div
-                            className="h-full bg-gradient-to-r from-fuchsia-500 to-indigo-500 transition-all duration-300"
-                            style={{ width: `${currentScene.progressPercent}%` }}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center gap-2">
-                      <Film className="w-10 h-10 text-zinc-700" />
-                      <span className="text-sm text-zinc-400 font-medium">
-                        {currentScene ? "No image rendered yet for this scene" : "No scenes available"}
-                      </span>
-                      {currentScene && (
-                        <button
-                          type="button"
-                          onClick={() => generateSceneImageRun(currentScene, activeCharacters)}
-                          className="mt-2 text-xs font-semibold text-white bg-zinc-800 hover:bg-zinc-700 px-3.5 py-1.5 rounded-xl border border-zinc-700 transition-colors"
-                        >
-                          Render Image Now
-                        </button>
-                      )}
-                    </div>
-                  )}
+                <div className="absolute inset-0 bg-gradient-to-b from-zinc-900 to-zinc-950 flex flex-col items-center justify-center p-6 text-center z-0">
+                  <Film className="w-10 h-10 text-zinc-700 mb-2" />
+                  <span className="text-sm text-zinc-400 font-medium">
+                    No background scenery generated yet
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("locations")}
+                    className="mt-2 text-xs font-semibold text-indigo-400 bg-indigo-950/60 border border-indigo-800/40 px-3 py-1.5 rounded-xl transition"
+                  >
+                    Open World Studio &rarr;
+                  </button>
+                </div>
+              )}
+
+              {/* LAYER 2: Character Sprite Cutouts (when in Layered Mode) */}
+              {stageMode === "layered" && (
+                <div className="absolute inset-0 pointer-events-none z-10 flex items-end justify-center overflow-hidden">
+                  {displayCharacters.map((char, idx) => {
+                    const isSpeaking = speakerChar?.id === char.id;
+                    const cueEmotion = parseEmotionFromCue(currentDialogue?.voiceCue);
+
+                    // Find matching sprite in character's sprites
+                    const charSprites = char.sprites || {};
+                    const spriteList = Object.values(charSprites);
+                    const matchingSprite =
+                      spriteList.find((s) => s.emotionId === cueEmotion) ||
+                      spriteList.find((s) => s.emotionId === "neutral") ||
+                      spriteList[0];
+
+                    const spriteUrl = matchingSprite?.imageUrl || char.avatarUrl;
+                    const charCm = char.cm || (char.gender === "male" ? 178 : 165);
+                    const heightPercent = Math.min(94, Math.max(72, (charCm / 185) * 88));
+
+                    const total = displayCharacters.length;
+                    const leftPct =
+                      total === 1
+                        ? 50
+                        : total === 2
+                        ? idx === 0
+                          ? 32
+                          : 68
+                        : idx === 0
+                        ? 20
+                        : idx === 1
+                        ? 50
+                        : 80;
+
+                    if (!spriteUrl) {
+                      return null;
+                    }
+
+                    return (
+                      <div
+                        key={char.id}
+                        className={`absolute bottom-0 transition-all duration-300 ease-out flex flex-col items-center justify-end ${
+                          isSpeaking
+                            ? "z-20 opacity-100 scale-100 brightness-105 drop-shadow-[0_12px_24px_rgba(0,0,0,0.85)]"
+                            : "z-10 opacity-70 scale-[0.96] brightness-75 drop-shadow-md"
+                        }`}
+                        style={{
+                          left: `${leftPct}%`,
+                          transform: "translateX(-50%)",
+                          height: `${heightPercent}%`,
+                          maxHeight: "92%",
+                        }}
+                      >
+                        <img
+                          src={spriteUrl}
+                          alt={char.name}
+                          className="h-full w-auto object-contain select-none pointer-events-auto"
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
               {/* Scene Top Info Bar (HUD overlay) */}
-              <div className="relative z-10 p-3 sm:p-4 flex items-center justify-between bg-gradient-to-b from-black/85 via-black/40 to-transparent">
-                <div className="flex items-center gap-2">
+              <div className="relative z-30 p-3 sm:p-4 flex items-center justify-between bg-gradient-to-b from-black/85 via-black/40 to-transparent">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="px-3 py-1 rounded-full bg-black/70 backdrop-blur-md border border-white/10 text-xs font-bold text-white shadow-md">
                     Scene {currentSceneIndex + 1} of {scenes.length}
                   </span>
@@ -1368,12 +1509,51 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
                       {currentScene.sceneTone.replace("_", " ")}
                     </span>
                   )}
-                  <span className="hidden sm:inline-block text-xs font-medium text-zinc-200 drop-shadow">
-                    {currentScene?.title}
-                  </span>
+
+                  {/* Stage Render Mode Switcher */}
+                  <div className="flex items-center bg-black/60 backdrop-blur-md p-0.5 rounded-full border border-white/10">
+                    <button
+                      type="button"
+                      onClick={() => setStageMode("layered")}
+                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold transition ${
+                        stageMode === "layered"
+                          ? "bg-fuchsia-600 text-white shadow"
+                          : "text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      Sprites
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStageMode("cg")}
+                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold transition ${
+                        stageMode === "cg"
+                          ? "bg-fuchsia-600 text-white shadow"
+                          : "text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      CG Mode
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {/* Background Scenery Switcher */}
+                  {availableBackgrounds.length > 0 && stageMode === "layered" && (
+                    <select
+                      value={stageBgOverride}
+                      onChange={(e) => setStageBgOverride(e.target.value)}
+                      className="hidden md:inline-block bg-black/70 backdrop-blur-md border border-white/15 text-[11px] font-semibold text-zinc-300 rounded-full px-2.5 py-1 focus:outline-none"
+                    >
+                      <option value="">Auto Location BG</option>
+                      {availableBackgrounds.map((bg, i) => (
+                        <option key={i} value={bg.url}>
+                          {bg.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => setIsAutoPlay(!isAutoPlay)}
@@ -1393,7 +1573,7 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
                       onClick={() => generateSceneImageRun(currentScene, activeCharacters)}
                       disabled={currentScene.isGenerating || !!currentGeneratingSceneId}
                       className="p-1.5 rounded-full bg-black/70 backdrop-blur-md border border-white/15 text-zinc-300 hover:text-white hover:bg-black/90 transition-colors disabled:opacity-40"
-                      title="Regenerate this scene image"
+                      title="Render full-canvas scene illustration"
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
                     </button>
@@ -1402,7 +1582,7 @@ export const VisualNovelPage: React.FC<VisualNovelPageProps> = ({
               </div>
 
               {/* Bottom Subtle Artwork Shade */}
-              <div className="h-6 bg-gradient-to-t from-black/30 to-transparent pointer-events-none" />
+              <div className="h-6 bg-gradient-to-t from-black/30 to-transparent pointer-events-none z-20" />
             </div>
 
             {/* Dedicated Dialogue Card BELOW the Artwork */}

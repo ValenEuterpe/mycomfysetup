@@ -1,5 +1,5 @@
 import { GenerationHistoryItem } from "../types/workflow";
-import { VNCharacter, VNStory, VNAttire } from "../types/visualNovel";
+import { VNCharacter, VNStory, VNAttire, VNWorld, VNSpriteVariant } from "../types/visualNovel";
 
 const STORAGE_KEYS = {
   ENDPOINT: "comfy_studio_endpoint",
@@ -11,6 +11,7 @@ const STORAGE_KEYS = {
   VN_CHARACTERS: "comfy_studio_vn_characters",
   VN_STORIES: "comfy_studio_vn_stories",
   VN_ATTIRES: "comfy_studio_vn_attires",
+  VN_WORLDS: "comfy_studio_vn_worlds",
 };
 
 export const DEFAULT_ENDPOINT =
@@ -413,4 +414,87 @@ export function deleteVNAttire(id: string): void {
     }).catch(() => {});
   } catch {}
 }
+
+export const DEFAULT_WORLDS: VNWorld[] = [
+  {
+    id: "world_tropical_island",
+    title: "Tropical Mystery Island",
+    locations: [
+      {
+        id: "loc_sandy_beach",
+        name: "Sandy Coastline",
+        description: "White sandy beach with turquoise ocean waves and leaning palm trees",
+        prompt: "pristine sandy beach, turquoise tropical ocean waves crashing on shore, leaning palm trees, driftwood on wet sand",
+        timeVariants: {},
+      },
+      {
+        id: "loc_jungle_camp",
+        name: "Survivor Jungle Camp",
+        description: "Rustic makeshift survival shelter surrounded by lush bamboo and tropical vegetation",
+        prompt: "rustic makeshift survival campsite, bamboo tent shelter, campfire with stones, surrounded by dense tropical rainforest ferns and palm leaves",
+        timeVariants: {},
+      },
+      {
+        id: "loc_cliff_overlook",
+        name: "Ocean Cliff Overlook",
+        description: "Dramatic rocky cliff looking over the vast open ocean and distant horizon",
+        prompt: "high rocky coastal cliff edge overlooking the endless azure sea, ocean horizon, rugged stone plateau",
+        timeVariants: {},
+      },
+    ],
+  },
+];
+
+export function loadVNWorlds(): VNWorld[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.VN_WORLDS);
+    if (!raw) return DEFAULT_WORLDS;
+    const worlds: VNWorld[] = JSON.parse(raw);
+    return worlds.length > 0 ? worlds : DEFAULT_WORLDS;
+  } catch {
+    return DEFAULT_WORLDS;
+  }
+}
+
+export function saveVNWorld(world: VNWorld): void {
+  try {
+    const current = loadVNWorlds();
+    const existingIndex = current.findIndex((w) => w.id === world.id);
+    let updated: VNWorld[];
+    if (existingIndex >= 0) {
+      updated = [...current];
+      updated[existingIndex] = world;
+    } else {
+      updated = [world, ...current];
+    }
+    localStorage.setItem(STORAGE_KEYS.VN_WORLDS, JSON.stringify(updated));
+  } catch {}
+}
+
+export function deleteVNWorld(id: string): void {
+  try {
+    const current = loadVNWorlds();
+    const updated = current.filter((w) => w.id !== id);
+    localStorage.setItem(STORAGE_KEYS.VN_WORLDS, JSON.stringify(updated));
+  } catch {}
+}
+
+export function saveVNSpriteVariant(charId: string, sprite: VNSpriteVariant): void {
+  try {
+    const chars = loadVNCharacters();
+    const target = chars.find((c) => c.id === charId);
+    if (!target) return;
+
+    const sprites = target.sprites || {};
+    const key = `${sprite.outfitId}_${sprite.emotionId}`;
+    sprites[key] = sprite;
+
+    const updatedChar: VNCharacter = {
+      ...target,
+      sprites,
+    };
+    saveVNCharacter(updatedChar);
+  } catch {}
+}
+
 
