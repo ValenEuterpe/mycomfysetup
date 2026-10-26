@@ -4,6 +4,7 @@ import { ComfyWorkflowGraph, ExtractedParameter } from "../../types/workflow";
 import { getRatioSupportForGraph } from "../../lib/ratioSupport";
 import { PromptField } from "./PromptField";
 import { DimensionField } from "./DimensionField";
+import { StickerField } from "./StickerField";
 import { SamplerField } from "./SamplerField";
 import { MediaUploadField } from "./MediaUploadField";
 
@@ -29,6 +30,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
   // Group parameters by category
   const promptParams = parameters.filter((p) => p.category === "prompt");
   const dimensionParams = parameters.filter((p) => p.category === "dimension");
+  const stickerParams = parameters.filter((p) => p.category === "sticker");
   const samplerParams = parameters.filter((p) => p.category === "sampler");
   const mediaParams = parameters.filter((p) => p.category === "media");
   const modelParams = parameters.filter((p) => p.category === "model");
@@ -53,6 +55,14 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
           parameters={dimensionParams}
           onParameterChange={onParameterChange}
           ratioSupport={getRatioSupportForGraph(workflowGraph)}
+        />
+      )}
+
+      {/* Sticker & Cutout Settings (Thickness & Color) */}
+      {stickerParams.length > 0 && (
+        <StickerField
+          parameters={stickerParams}
+          onParameterChange={onParameterChange}
         />
       )}
 

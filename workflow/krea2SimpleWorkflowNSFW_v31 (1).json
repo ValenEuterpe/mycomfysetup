@@ -1,0 +1,258 @@
+{
+  "15": {
+    "inputs": {
+      "PowerLoraLoaderHeaderWidget": {
+        "type": "PowerLoraLoaderHeaderWidget"
+      },
+      "lora_1": {
+        "on": true,
+        "lora": "Realistic Snapshot (Z-Image-Turbo + Krea 2).safetensors",
+        "strength": 1
+      },
+      "➕ Add Lora": "",
+      "model": [
+        "91:100",
+        0
+      ],
+      "clip": [
+        "91:92",
+        0
+      ]
+    },
+    "class_type": "Power Lora Loader (rgthree)",
+    "_meta": {
+      "title": "Power Lora Loader (rgthree)",
+      "aux_id": "rgthree/rgthree-comfy",
+      "ver": "d7297b42f0fa78bec1c0411478f887423c249502"
+    }
+  },
+  "43": {
+    "inputs": {
+      "randomize_percent": 50,
+      "auto_strength_factor": 1,
+      "strength": 20,
+      "noise_insert": "noise on beginning steps",
+      "steps_switchover_percent": 25,
+      "seed": 1057448909959496,
+      "mask_starts_at": "beginning",
+      "mask_percent": 0,
+      "log_to_console": false,
+      "noise_distribution": "uniform",
+      "granularity": "values",
+      "conditioning": [
+        "91:104",
+        0
+      ]
+    },
+    "class_type": "KreaSeedVarianceEnhancer",
+    "_meta": {
+      "title": "Seed Variance Enhancer - Krea 2 Turbo",
+      "aux_id": "harukimix/KreaSeedVarianceEnhancer",
+      "ver": "1515d23a5b399a44ccd97482e1105a43937268ae"
+    }
+  },
+  "112": {
+    "inputs": {
+      "filename_prefix": "2026-10-22/Krea2",
+      "images": [
+        "91:94",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "91:92": {
+    "inputs": {
+      "clip_name": "qwen3vl_4b_bf16.safetensors",
+      "type": "krea2",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "91:93": {
+    "inputs": {
+      "width": 1440,
+      "height": 1920,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "91:99": {
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "91:104": {
+    "inputs": {
+      "text": "Style & Medium:\nPhotorealistic erotic lingerie photography in a dimly lit intimate room with direct on-camera flash lighting, sultry seductive atmosphere, realistic fabric textures and high contrast lighting effects.\n\nAngle & Framing:\nMedium shot from a slight three-quarter rear angle, subject centered and positioned to prominently showcase the gold and black T-back thong, with the dark room background softly blurred for dramatic focus on her form.\n\nPose:\nStanding with her back partially turned toward the camera and head looking over the shoulder with a sultry direct gaze and slightly parted lips, one hand resting on her hip while the other lightly touches her thigh, body arched subtly to emphasize the curves and the T-back underwear.\n\nSubject:\nA 20 year old Japanese woman with brown eyes.\n\nOutfit & Texture:\nWearing only a sexy gold and black T-back thong underwear featuring intricate lace panels, metallic gold accents and thin straps, the fabric showing delicate sheen, stretch and fine texture with the T-back design prominently displayed.\n\nBackground & Environment:\nDimly lit intimate bedroom with dark walls and minimal furniture, soft ambient shadows creating a mysterious and sensual atmosphere.\n\nTechnique:\nDirect on-camera flash at f/2.8 creating strong specular highlights on the body and metallic fabric with deep shadows and high contrast, high-resolution detail on lace texture and form, realistic low-light flash photography with natural grain.\n\nLight & Color:\nDirect harsh flash lighting against the dark room creating dramatic high contrast with bright highlights on the gold accents and skin and deep moody shadows, low-key sultry color palette with rich golds, blacks and warm skin tones contrasting the cool dark background.",
+      "clip": [
+        "15",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive Prompt",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "91:96": {
+    "inputs": {
+      "text": "Fat, heavy, plus-size, overweight, curvy, blurry, lowres, pixelated, low quality, worst quality, jpeg artifacts, noise, grain, compression, chromatic aberration, out of focus, plastic skin,Fat, heavy, plus-size, overweight, blurry, lowres, pixelated, low quality, worst quality, jpeg artifacts, noise, grain, compression, chromatic aberration, out of focus, plastic skin,waxy skin, over-saturated colors, warped anatomy, smeared details, over-processing, composite look",
+      "clip": [
+        "15",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Negative Prompt",
+      "cnr_id": "comfy-core",
+      "ver": "0.25.0"
+    }
+  },
+  "91:100": {
+    "inputs": {
+      "unet_name": "Kroma (Krea-2).safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "91:94": {
+    "inputs": {
+      "samples": [
+        "91:109",
+        0
+      ],
+      "vae": [
+        "91:99",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "91:101": {
+    "inputs": {
+      "samples": [
+        "91:108",
+        0
+      ],
+      "vae": [
+        "91:99",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "91:108": {
+    "inputs": {
+      "eta": 0.5,
+      "sampler_name": "linear/euler",
+      "scheduler": "beta",
+      "steps": 12,
+      "steps_to_run": -1,
+      "denoise": 1,
+      "cfg": 1,
+      "seed": 1023281751352677,
+      "sampler_mode": "standard",
+      "bongmath": true,
+      "model": [
+        "15",
+        0
+      ],
+      "positive": [
+        "43",
+        0
+      ],
+      "negative": [
+        "91:96",
+        0
+      ],
+      "latent_image": [
+        "91:93",
+        0
+      ]
+    },
+    "class_type": "ClownsharKSampler_Beta",
+    "_meta": {
+      "title": "ClownsharKSampler (Pass 1)",
+      "cnr_id": "RES4LYF",
+      "aux_id": "ClownsharkBatwing/RES4LYF",
+      "ver": "56e44755d866c87ff9cb4b6608c8e42155db6ecc"
+    }
+  },
+  "91:109": {
+    "inputs": {
+      "eta": 0.5,
+      "sampler_name": "exponential/res_4s_munthe-kaas",
+      "scheduler": "kl_optimal",
+      "steps": 3,
+      "steps_to_run": -1,
+      "denoise": 0.27,
+      "cfg": 1,
+      "seed": 12345454,
+      "sampler_mode": "standard",
+      "bongmath": true,
+      "model": [
+        "15",
+        0
+      ],
+      "positive": [
+        "91:104",
+        0
+      ],
+      "negative": [
+        "91:96",
+        0
+      ],
+      "latent_image": [
+        "91:108",
+        0
+      ]
+    },
+    "class_type": "ClownsharKSampler_Beta",
+    "_meta": {
+      "title": "ClownsharKSampler (Pass 2)",
+      "cnr_id": "RES4LYF",
+      "aux_id": "ClownsharkBatwing/RES4LYF",
+      "ver": "56e44755d866c87ff9cb4b6608c8e42155db6ecc"
+    }
+  }
+}

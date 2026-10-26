@@ -15,6 +15,7 @@ import {
   LayoutTemplate,
   Columns2,
   UserRoundPlus,
+  Grid,
 } from "lucide-react";
 import { GeneratedMedia, GenerationHistoryItem } from "../types/workflow";
 import { fetchComfyMediaBlob } from "../lib/comfyClient";
@@ -66,6 +67,7 @@ export const OutputGallery: React.FC<OutputGalleryProps> = ({
     formattedSize: "0 MB",
   });
   const [entitySaveOpen, setEntitySaveOpen] = useState(false);
+  const [previewBg, setPreviewBg] = useState<"dark" | "checkerboard">("checkerboard");
 
   // Load local cache stats
   const refreshCacheStats = () => {
@@ -214,7 +216,11 @@ export const OutputGallery: React.FC<OutputGalleryProps> = ({
     <div className="flex flex-col gap-4">
       {/* Main View Area */}
       <div
-        className={`relative bg-zinc-900/90 border border-zinc-800 rounded-2xl overflow-hidden flex items-center justify-center shadow-xl transition-all ${
+        className={`relative border border-zinc-800 rounded-2xl overflow-hidden flex items-center justify-center shadow-xl transition-all ${
+          previewBg === "checkerboard"
+            ? "bg-[linear-gradient(45deg,#18181b_25%,transparent_25%),linear-gradient(-45deg,#18181b_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#18181b_75%),linear-gradient(-45deg,transparent_75%,#18181b_75%)] bg-[size:16px_16px] bg-[position:0_0,0_8px,8px_-8px,-8px_0px] bg-zinc-900"
+            : "bg-zinc-900/90"
+        } ${
           isFullscreen
             ? "fixed inset-4 z-50 aspect-auto bg-black/95 backdrop-blur-xl"
             : layoutMode === "top"
@@ -287,6 +293,25 @@ export const OutputGallery: React.FC<OutputGalleryProps> = ({
 
             {/* Hover Actions Toolbar */}
             <div className="absolute top-3 right-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-950/80 backdrop-blur-md p-1.5 rounded-xl border border-zinc-800 shadow-lg z-10">
+              <button
+                type="button"
+                onClick={() =>
+                  setPreviewBg((prev) => (prev === "checkerboard" ? "dark" : "checkerboard"))
+                }
+                title={
+                  previewBg === "checkerboard"
+                    ? "Switch to solid dark background"
+                    : "Switch to transparent checkerboard background"
+                }
+                className={`p-2 rounded-lg transition-colors ${
+                  previewBg === "checkerboard"
+                    ? "text-fuchsia-400 bg-fuchsia-500/10"
+                    : "text-zinc-300 hover:text-white hover:bg-zinc-800"
+                }`}
+              >
+                <Grid className="w-4 h-4" />
+              </button>
+
               {onToggleLayoutMode && (
                 <button
                   type="button"

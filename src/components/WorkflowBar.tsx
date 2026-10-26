@@ -1,5 +1,15 @@
 import React, { useRef, useState } from "react";
-import { FileJson, Upload, Clipboard, Download, Plus, Check } from "lucide-react";
+import {
+  FileJson,
+  Upload,
+  Clipboard,
+  Download,
+  Plus,
+  Check,
+  Sparkles,
+  Wand2,
+  Scissors,
+} from "lucide-react";
 import { WorkflowPreset } from "../lib/storage";
 
 interface WorkflowBarProps {
@@ -58,17 +68,35 @@ export const WorkflowBar: React.FC<WorkflowBarProps> = ({
         </span>
         {presets.map((preset) => {
           const isActive = preset.id === activePresetId;
+          const lower = (preset.id + " " + preset.name).toLowerCase();
+          const isSticker = lower.includes("sticker") || lower.includes("removebg") || lower.includes("cutout");
+          const isKroma = lower.includes("kroma") || lower.includes("krea");
+          const isAnima = !isSticker && !isKroma && lower.includes("anima");
+
+          const activeClass = isSticker
+            ? "bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white shadow-sm shadow-fuchsia-600/30"
+            : isKroma
+            ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-sm shadow-purple-600/30"
+            : isAnima
+            ? "bg-indigo-600 text-white shadow-sm shadow-indigo-600/30"
+            : "bg-zinc-700 text-white shadow-sm";
+
           return (
             <button
               key={preset.id}
               onClick={() => onSelectPreset(preset.id)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 flex items-center gap-1.5 ${
                 isActive
-                  ? "bg-indigo-600 text-white shadow-sm shadow-indigo-600/30"
+                  ? activeClass
                   : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white"
               }`}
             >
-              {isActive && <Check className="w-3 h-3 text-indigo-200" />}
+              {isSticker && <Scissors className="w-3.5 h-3.5 text-fuchsia-300 shrink-0" />}
+              {isKroma && <Wand2 className="w-3.5 h-3.5 text-purple-300 shrink-0" />}
+              {isAnima && <Sparkles className="w-3.5 h-3.5 text-indigo-300 shrink-0" />}
+              {!isSticker && !isKroma && !isAnima && isActive && (
+                <Check className="w-3 h-3 text-indigo-200 shrink-0" />
+              )}
               <span>{preset.name}</span>
             </button>
           );

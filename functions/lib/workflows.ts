@@ -1,5 +1,6 @@
 import { animaBaseGraph } from "../workflows/animaBase";
 import { kromaUpscaleGraph } from "../workflows/kromaUpscale";
+import { animaStickerGraph } from "../workflows/animaSticker";
 import { ComfyWorkflowGraph } from "../../src/types/workflow";
 import { RATIO_PRESETS, RatioPreset, findRatio } from "../../src/lib/ratios";
 
@@ -90,6 +91,26 @@ const WORKFLOWS: BotWorkflow[] = [
       latentNode: { node: "23", widthKey: "width", heightKey: "height" },
     },
     outputNodes: ["19"],
+  },
+  {
+    id: "anima-sticker",
+    displayName: "Anima Sticker (Cutout)",
+    description:
+      "Anima with RMBG-2.0 background removal and outline sticker highlight. Transparent PNG output.",
+    graph: animaStickerGraph,
+    supportsNegativePrompt: true,
+    supportsSize: true,
+    prefillDefault: ANIMA_PREFILL,
+    negativeDefault: ANIMA_NEGATIVE,
+    inject: {
+      positiveNode: "2",
+      positiveKey: "text",
+      negativeNode: "4",
+      negativeKey: "text",
+      seedNodes: [{ node: "6", key: "seed" }],
+      latentNode: { node: "7", widthKey: "width", heightKey: "height" },
+    },
+    outputNodes: ["14"],
   },
 ];
 

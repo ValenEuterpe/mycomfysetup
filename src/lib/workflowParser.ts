@@ -121,6 +121,41 @@ export function parseWorkflowParameters(graph: ComfyWorkflowGraph): ExtractedPar
           label = "Positive Prompt";
         }
       } else if (
+        classType === "OutlineAlphaSnap" ||
+        classType.toLowerCase().includes("outline")
+      ) {
+        category = "sticker";
+        if (inputKey === "width" || inputKey === "thickness") {
+          label = "Outline Thickness (px)";
+          type = "number";
+          min = 0;
+          max = 50;
+          step = 1;
+        } else if (inputKey === "color" || inputKey.includes("color")) {
+          label = "Outline Color";
+          type = "color";
+        } else if (typeof rawValue === "number") {
+          type = "number";
+        } else {
+          type = "text";
+        }
+      } else if (
+        classType === "RMBG" ||
+        classType.toLowerCase().includes("rmbg")
+      ) {
+        category = "sticker";
+        if (inputKey === "sensitivity") {
+          label = "RMBG Sensitivity";
+          type = "number";
+          min = 0;
+          max = 5;
+          step = 0.1;
+        } else if (typeof rawValue === "number") {
+          type = "number";
+        } else {
+          type = "text";
+        }
+      } else if (
         inputKey === "width" ||
         inputKey === "height" ||
         inputKey === "batch_size" ||
@@ -247,15 +282,16 @@ export function parseWorkflowParameters(graph: ComfyWorkflowGraph): ExtractedPar
   }
 
   // Sort parameters logically:
-  // Prompts (Positive first, Negative second) -> Dimensions -> Media -> Sampler -> Models -> Primitives -> Generic
+  // Prompts (Positive first, Negative second) -> Dimensions -> Sticker -> Media -> Sampler -> Models -> Primitives -> Generic
   const categoryOrder: Record<ParameterCategory, number> = {
     prompt: 1,
     dimension: 2,
-    media: 3,
-    sampler: 4,
-    model: 5,
-    primitive: 6,
-    generic: 7,
+    sticker: 3,
+    media: 4,
+    sampler: 5,
+    model: 6,
+    primitive: 7,
+    generic: 8,
   };
 
   return parameters.sort((a, b) => {

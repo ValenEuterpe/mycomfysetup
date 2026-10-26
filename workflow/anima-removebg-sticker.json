@@ -1,0 +1,203 @@
+{
+  "1": {
+    "inputs": {
+      "clip_name": "qwen_3_06b_base.safetensors",
+      "type": "stable_diffusion",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "2": {
+    "inputs": {
+      "text": "masterpiece, best quality, score_9, score_8, safe, @silvana, Character Base: A 25-year-old East Asian woman, 5'6\" tall with a slim athletic build, sharp jawline, high cheekbones, dark almond-shaped eyes, and straight shoulder-length black hair with blunt bangs.\nClothing: Over-sized beige knit sweater and dark blue high-waisted denim jeans.\nPose & Hands: Standing timidly with shoulders turned slightly inward, both hands held in front at chest level with her two index fingers touching tip-to-tip in a hesitant, shy gesture.\nExpression: Shy and bashful expression, slight rosy blush on her cheeks, eyes looking modestly upward from under her bangs with a soft, timid smile.\nSetting & Style: Photorealistic, warm and intimate lighting in a cozy independent bookstore aisle, soft focus on wooden book stacks in the background.",
+      "clip": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt) Pos",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "3": {
+    "inputs": {
+      "unet_name": "anima.base.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "4": {
+    "inputs": {
+      "text": "worst quality, low quality, score_1, score_2, score_3, too many fingers, deformed hand, too many arms, ugly, uncanny valley",
+      "clip": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt) Neg",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "5": {
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "6": {
+    "inputs": {
+      "seed": 707943841279101,
+      "steps": 30,
+      "cfg": 4,
+      "sampler_name": "er_sde",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "8",
+        0
+      ],
+      "positive": [
+        "2",
+        0
+      ],
+      "negative": [
+        "4",
+        0
+      ],
+      "latent_image": [
+        "7",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "7": {
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "8": {
+    "inputs": {
+      "lora_name": "silvana.safetensors",
+      "strength_model": 1,
+      "model": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Load LoRA",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "9": {
+    "inputs": {
+      "samples": [
+        "6",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "12": {
+    "inputs": {
+      "model": "RMBG-2.0",
+      "sensitivity": 1,
+      "process_res": 1024,
+      "mask_blur": 0,
+      "mask_offset": 0,
+      "invert_output": false,
+      "refine_foreground": false,
+      "unload_model": false,
+      "background": "Alpha",
+      "background_color": "#222222",
+      "image": [
+        "9",
+        0
+      ]
+    },
+    "class_type": "RMBG",
+    "_meta": {
+      "title": "Remove Background (RMBG)",
+      "cnr_id": "comfyui-rmbg",
+      "aux_id": "1038lab/ComfyUI-RMBG",
+      "ver": "a66a5e641a54988d80ed6aad18946081c85f309e"
+    }
+  },
+  "13": {
+    "inputs": {
+      "width": 2,
+      "color": "#FFFFFF",
+      "image": [
+        "12",
+        0
+      ]
+    },
+    "class_type": "OutlineAlphaSnap",
+    "_meta": {
+      "title": "Outline Alpha Snap",
+      "aux_id": "dennisvink/comfyui-outline",
+      "ver": "d4c65c651bcc27cc41c99f1042a743bde2375201"
+    }
+  },
+  "14": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "13",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  }
+}

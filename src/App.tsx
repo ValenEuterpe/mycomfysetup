@@ -118,21 +118,61 @@ export const App: React.FC = () => {
   useEffect(() => {
     async function initWorkflow() {
       try {
-        const res = await fetch("/workflows/anima-base-api.json");
-        const json: ComfyWorkflowGraph = await res.json();
-        setWorkflowGraph(json);
-        const parsed = parseWorkflowParameters(json);
-        setParameters(parsed);
+        const [animaRes, kromaRes, stickerRes] = await Promise.allSettled([
+          fetch("/workflows/anima-base-api.json").then((r) => (r.ok ? r.json() : null)),
+          fetch("/workflows/kroma-upscale-api.json").then((r) => (r.ok ? r.json() : null)),
+          fetch("/workflows/anima-removebg-sticker.json").then((r) => (r.ok ? r.json() : null)),
+        ]);
 
-        const defaultPreset: WorkflowPreset = {
-          id: "anima-base",
-          name: "Anima Base (T2I)",
-          description: "Anima Base Text-to-Image with LoRA",
-          workflowJson: JSON.stringify(json),
-        };
+        const builtInPresets: WorkflowPreset[] = [];
 
-        const custom = loadCustomPresets();
-        setPresets([defaultPreset, ...custom]);
+        const animaJson = animaRes.status === "fulfilled" && animaRes.value ? animaRes.value : null;
+        if (animaJson) {
+          builtInPresets.push({
+            id: "anima-base",
+            name: "Anima Base",
+            description: "Anima Base Text-to-Image with LoRA",
+            workflowJson: JSON.stringify(animaJson),
+          });
+        }
+
+        const kromaJson = kromaRes.status === "fulfilled" && kromaRes.value ? kromaRes.value : null;
+        if (kromaJson) {
+          builtInPresets.push({
+            id: "kroma",
+            name: "Krea-2 (Kroma)",
+            description: "Krea-2 / Kroma generation + upscale",
+            workflowJson: JSON.stringify(kromaJson),
+          });
+        }
+
+        const stickerJson = stickerRes.status === "fulfilled" && stickerRes.value ? stickerRes.value : null;
+        if (stickerJson) {
+          builtInPresets.push({
+            id: "anima-sticker",
+            name: "Anima Sticker",
+            description: "Anima with RMBG-2.0 background removal and customizable sticker outline",
+            workflowJson: JSON.stringify(stickerJson),
+          });
+        }
+
+        // Set initial active workflow graph
+        const initialPreset =
+          builtInPresets.find((p) => p.id === activePresetId) || builtInPresets[0];
+
+        if (initialPreset) {
+          const json: ComfyWorkflowGraph = JSON.parse(initialPreset.workflowJson);
+          setWorkflowGraph(json);
+          const parsed = parseWorkflowParameters(json);
+          setParameters(parsed);
+          setCurrentWorkflowName(initialPreset.name);
+          setActivePresetId(initialPreset.id);
+        }
+
+        const custom = loadCustomPresets().filter(
+          (c) => !builtInPresets.some((b) => b.id === c.id)
+        );
+        setPresets([...builtInPresets, ...custom]);
       } catch (err) {
         console.error("Failed to load initial workflow:", err);
       }

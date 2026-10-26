@@ -14,6 +14,7 @@ export type ComfyWorkflowGraph = Record<string, ComfyNode>;
 export type ParameterCategory =
   | "prompt"
   | "dimension"
+  | "sticker"
   | "sampler"
   | "media"
   | "model"
@@ -26,7 +27,8 @@ export type ParameterType =
   | "number"
   | "boolean"
   | "select"
-  | "image";
+  | "image"
+  | "color";
 
 export interface ExtractedParameter {
   id: string; // e.g., "3.text" or "8.seed"
