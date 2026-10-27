@@ -19,9 +19,10 @@ export const onRequest = async (context: {
   }
 
   // Public routes: login endpoint + bot webhooks + public OpenAI-compatible /v1 API
-  // + ratio cheat-sheet asset + public Visual Novel page & proxy
+  // + ratio cheat-sheet asset + public Visual Novel page & public Image Gen page & proxy
   const publicPaths = [
     "/api/auth",
+    "/api/config",
     "/api/telegram",
     "/api/discord",
     "/api/proxy",
@@ -29,6 +30,7 @@ export const onRequest = async (context: {
     "/api/attires",
     "/v1",
     "/aspectratio.jpg",
+    "/public",
     "/novel",
     "/vn",
     "/workflows",
@@ -36,8 +38,8 @@ export const onRequest = async (context: {
     "/favicon.ico",
   ];
   if (publicPaths.some((p) => url.pathname === p || url.pathname.startsWith(p + "/"))) {
-    // If accessing the public visual novel route directly, serve root index.html
-    if (url.pathname === "/novel" || url.pathname === "/vn") {
+    // If accessing a public SPA route directly, serve root index.html
+    if (url.pathname === "/novel" || url.pathname === "/vn" || url.pathname === "/public") {
       const rootUrl = new URL("/", request.url);
       return next(new Request(rootUrl.toString(), request));
     }

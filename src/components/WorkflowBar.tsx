@@ -20,6 +20,7 @@ interface WorkflowBarProps {
   onUploadWorkflowFile: (file: File) => void;
   onPasteWorkflowJson: (jsonStr: string, name?: string) => void;
   onExportWorkflowJson: () => void;
+  isPublic?: boolean;
 }
 
 export const WorkflowBar: React.FC<WorkflowBarProps> = ({
@@ -30,6 +31,7 @@ export const WorkflowBar: React.FC<WorkflowBarProps> = ({
   onUploadWorkflowFile,
   onPasteWorkflowJson,
   onExportWorkflowJson,
+  isPublic = false,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showPasteModal, setShowPasteModal] = useState(false);
@@ -103,51 +105,53 @@ export const WorkflowBar: React.FC<WorkflowBarProps> = ({
         })}
       </div>
 
-      {/* Action buttons */}
-      <div className="flex items-center gap-2">
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileChange}
-          accept=".json,application/json"
-          className="hidden"
-        />
+      {/* Action buttons (hidden in public mode) */}
+      {!isPublic && (
+        <div className="flex items-center gap-2">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept=".json,application/json"
+            className="hidden"
+          />
 
-        {/* Upload File */}
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 hover:text-white border border-zinc-700/60 transition-colors"
-          title="Upload ComfyUI API JSON file"
-        >
-          <Upload className="w-3.5 h-3.5 text-indigo-400" />
-          <span>Load JSON File</span>
-        </button>
+          {/* Upload File */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 hover:text-white border border-zinc-700/60 transition-colors"
+            title="Upload ComfyUI API JSON file"
+          >
+            <Upload className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Load JSON File</span>
+          </button>
 
-        {/* Paste JSON */}
-        <button
-          type="button"
-          onClick={() => setShowPasteModal(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 hover:text-white border border-zinc-700/60 transition-colors"
-          title="Paste raw ComfyUI API JSON"
-        >
-          <Clipboard className="w-3.5 h-3.5 text-indigo-400" />
-          <span>Paste JSON</span>
-        </button>
+          {/* Paste JSON */}
+          <button
+            type="button"
+            onClick={() => setShowPasteModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 hover:text-white border border-zinc-700/60 transition-colors"
+            title="Paste raw ComfyUI API JSON"
+          >
+            <Clipboard className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Paste JSON</span>
+          </button>
 
-        {/* Download JSON */}
-        <button
-          type="button"
-          onClick={onExportWorkflowJson}
-          className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700/60 transition-colors"
-          title="Download current workflow JSON"
-        >
-          <Download className="w-3.5 h-3.5" />
-        </button>
-      </div>
+          {/* Download JSON */}
+          <button
+            type="button"
+            onClick={onExportWorkflowJson}
+            className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700/60 transition-colors"
+            title="Download current workflow JSON"
+          >
+            <Download className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Paste Modal */}
-      {showPasteModal && (
+      {!isPublic && showPasteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-xl p-6 shadow-2xl flex flex-col gap-4">
             <div className="flex items-center justify-between">

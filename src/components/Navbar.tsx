@@ -22,7 +22,7 @@ import {
 import { ComfyConnectionTestResult } from "../lib/comfyClient";
 import { VNTab } from "../types/visualNovel";
 
-export type StudioPage = "generate" | "edit" | "novel";
+export type StudioPage = "generate" | "edit" | "novel" | "public";
 
 interface NavbarProps {
   connectionStatus: ComfyConnectionTestResult | null;
@@ -33,6 +33,7 @@ interface NavbarProps {
   onResetParams: () => void;
   activePage: StudioPage;
   onNavigate: (page: StudioPage) => void;
+  isPublic?: boolean;
   vnTab?: VNTab;
   onVnTabChange?: (tab: VNTab) => void;
   vnCharacterCount?: number;
@@ -49,6 +50,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onResetParams,
   activePage,
   onNavigate,
+  isPublic = false,
   vnTab = "characters",
   onVnTabChange,
   vnCharacterCount,
@@ -56,6 +58,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   vnAttireCount,
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const isPublicMode = isPublic || activePage === "public";
 
   const handleMobileAction = (action: () => void) => {
     action();
@@ -87,173 +90,212 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Right Desktop Actions */}
         <div className="hidden md:flex items-center gap-2 lg:gap-2.5">
-          {/* Page tabs */}
-          <div className="flex items-center gap-0.5 p-1 rounded-xl bg-zinc-900/80 border border-zinc-800">
-            <button
-              type="button"
-              onClick={() => onNavigate("generate")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                activePage === "generate"
-                  ? "bg-indigo-600/90 text-white shadow-sm"
-                  : "text-zinc-400 hover:text-zinc-100"
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              Generate
-            </button>
-            <button
-              type="button"
-              onClick={() => onNavigate("edit")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                activePage === "edit"
-                  ? "bg-fuchsia-600/90 text-white shadow-sm"
-                  : "text-zinc-400 hover:text-zinc-100"
-              }`}
-            >
-              <Wand2 className="w-3.5 h-3.5" />
-              Identity Edit
-            </button>
-            <button
-              type="button"
-              onClick={() => onNavigate("novel")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                activePage === "novel"
-                  ? "bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white shadow-sm"
-                  : "text-zinc-400 hover:text-zinc-100"
-              }`}
-            >
-              <Film className="w-3.5 h-3.5" />
-              Visual Novel
-            </button>
-          </div>
+          {!isPublicMode && (
+            <>
+              {/* Page tabs */}
+              <div className="flex items-center gap-0.5 p-1 rounded-xl bg-zinc-900/80 border border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => onNavigate("generate")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                    activePage === "generate"
+                      ? "bg-indigo-600/90 text-white shadow-sm"
+                      : "text-zinc-400 hover:text-zinc-100"
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Generate
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigate("edit")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                    activePage === "edit"
+                      ? "bg-fuchsia-600/90 text-white shadow-sm"
+                      : "text-zinc-400 hover:text-zinc-100"
+                  }`}
+                >
+                  <Wand2 className="w-3.5 h-3.5" />
+                  Identity Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigate("novel")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                    activePage === "novel"
+                      ? "bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white shadow-sm"
+                      : "text-zinc-400 hover:text-zinc-100"
+                  }`}
+                >
+                  <Film className="w-3.5 h-3.5" />
+                  Visual Novel
+                </button>
+              </div>
 
-          {/* Visual Novel Workflow Tabs (when activePage === 'novel') */}
-          {activePage === "novel" && onVnTabChange && (
-            <div className="flex items-center gap-0.5 p-1 rounded-xl bg-zinc-900 border border-zinc-800 animate-in fade-in">
-              <button
-                type="button"
-                onClick={() => onVnTabChange("characters")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                  vnTab === "characters"
-                    ? "bg-fuchsia-600 text-white shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-100"
-                }`}
-              >
-                <UserPlus className="w-3.5 h-3.5" />
-                <span>1. Cast{vnCharacterCount !== undefined ? ` (${vnCharacterCount})` : ""}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onVnTabChange("wardrobe")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                  vnTab === "wardrobe"
-                    ? "bg-fuchsia-600 text-white shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-100"
-                }`}
-              >
-                <Shirt className="w-3.5 h-3.5" />
-                <span>2. Clothes{vnAttireCount !== undefined ? ` (${vnAttireCount})` : ""}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onVnTabChange("sprites")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                  vnTab === "sprites"
-                    ? "bg-fuchsia-600 text-white shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-100"
-                }`}
-              >
-                <Smile className="w-3.5 h-3.5" />
-                <span>3. Sprites</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onVnTabChange("locations")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                  vnTab === "locations"
-                    ? "bg-fuchsia-600 text-white shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-100"
-                }`}
-              >
-                <Compass className="w-3.5 h-3.5" />
-                <span>4. Worlds</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onVnTabChange("story")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                  vnTab === "story"
-                    ? "bg-fuchsia-600 text-white shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-100"
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span>5. Story</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onVnTabChange("reader")}
-                disabled={!vnSceneCount}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-40 ${
-                  vnTab === "reader"
-                    ? "bg-fuchsia-600 text-white shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-100"
-                }`}
-              >
-                <BookOpen className="w-3.5 h-3.5" />
-                <span>6. Play Novel{vnSceneCount ? ` (${vnSceneCount})` : ""}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onVnTabChange("ledger")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                  vnTab === "ledger"
-                    ? "bg-fuchsia-600 text-white shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-100"
-                }`}
-              >
-                <FileText className="w-3.5 h-3.5" />
-                <span>7. Ledger</span>
-              </button>
-            </div>
+              {/* Visual Novel Workflow Tabs (when activePage === 'novel') */}
+              {activePage === "novel" && onVnTabChange && (
+                <div className="flex items-center gap-0.5 p-1 rounded-xl bg-zinc-900 border border-zinc-800 animate-in fade-in">
+                  <button
+                    type="button"
+                    onClick={() => onVnTabChange("characters")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                      vnTab === "characters"
+                        ? "bg-fuchsia-600 text-white shadow-sm"
+                        : "text-zinc-400 hover:text-zinc-100"
+                    }`}
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>1. Cast{vnCharacterCount !== undefined ? ` (${vnCharacterCount})` : ""}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onVnTabChange("wardrobe")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                      vnTab === "wardrobe"
+                        ? "bg-fuchsia-600 text-white shadow-sm"
+                        : "text-zinc-400 hover:text-zinc-100"
+                    }`}
+                  >
+                    <Shirt className="w-3.5 h-3.5" />
+                    <span>2. Clothes{vnAttireCount !== undefined ? ` (${vnAttireCount})` : ""}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onVnTabChange("sprites")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                      vnTab === "sprites"
+                        ? "bg-fuchsia-600 text-white shadow-sm"
+                        : "text-zinc-400 hover:text-zinc-100"
+                    }`}
+                  >
+                    <Smile className="w-3.5 h-3.5" />
+                    <span>3. Sprites</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onVnTabChange("locations")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                      vnTab === "locations"
+                        ? "bg-fuchsia-600 text-white shadow-sm"
+                        : "text-zinc-400 hover:text-zinc-100"
+                    }`}
+                  >
+                    <Compass className="w-3.5 h-3.5" />
+                    <span>4. Worlds</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onVnTabChange("story")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                      vnTab === "story"
+                        ? "bg-fuchsia-600 text-white shadow-sm"
+                        : "text-zinc-400 hover:text-zinc-100"
+                    }`}
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>5. Story</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onVnTabChange("reader")}
+                    disabled={!vnSceneCount}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-40 ${
+                      vnTab === "reader"
+                        ? "bg-fuchsia-600 text-white shadow-sm"
+                        : "text-zinc-400 hover:text-zinc-100"
+                    }`}
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>6. Play Novel{vnSceneCount ? ` (${vnSceneCount})` : ""}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onVnTabChange("ledger")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                      vnTab === "ledger"
+                        ? "bg-fuchsia-600 text-white shadow-sm"
+                        : "text-zinc-400 hover:text-zinc-100"
+                    }`}
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>7. Ledger</span>
+                  </button>
+                </div>
+              )}
+            </>
           )}
 
-          {/* Connection status pill (Clickable to open settings) */}
-          <button
-            type="button"
-            onClick={onOpenSettings}
-            title="Click to configure relay endpoint"
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium border transition-colors hover:brightness-110 cursor-pointer ${
-              isTestingConnection
-                ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                : connectionStatus?.ok
-                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                : connectionStatus
-                ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
-                : "bg-zinc-800/50 text-zinc-400 border-zinc-800"
-            }`}
-          >
-            <span
-              className={`w-2 h-2 rounded-full shrink-0 ${
+          {/* Connection status pill */}
+          {isPublicMode ? (
+            <div
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium border ${
                 isTestingConnection
-                  ? "bg-amber-400 animate-pulse"
+                  ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
                   : connectionStatus?.ok
-                  ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]"
+                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                   : connectionStatus
-                  ? "bg-rose-400"
-                  : "bg-zinc-500"
+                  ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                  : "bg-zinc-800/50 text-zinc-400 border-zinc-800"
               }`}
-            />
-            <span className="truncate max-w-[140px] lg:max-w-none">
-              {isTestingConnection
-                ? "Pinging..."
-                : connectionStatus?.ok
-                ? `Connected (${connectionStatus.latencyMs}ms)`
-                : connectionStatus
-                ? "Offline"
-                : "Configure Relay"}
-            </span>
-          </button>
+            >
+              <span
+                className={`w-2 h-2 rounded-full shrink-0 ${
+                  isTestingConnection
+                    ? "bg-amber-400 animate-pulse"
+                    : connectionStatus?.ok
+                    ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]"
+                    : connectionStatus
+                    ? "bg-rose-400"
+                    : "bg-zinc-500"
+                }`}
+              />
+              <span className="truncate max-w-[140px] lg:max-w-none">
+                {isTestingConnection
+                  ? "Connecting..."
+                  : connectionStatus?.ok
+                  ? `Online (${connectionStatus.latencyMs}ms)`
+                  : connectionStatus
+                  ? "Offline"
+                  : "Ready"}
+              </span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              title="Click to configure relay endpoint"
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium border transition-colors hover:brightness-110 cursor-pointer ${
+                isTestingConnection
+                  ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                  : connectionStatus?.ok
+                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                  : connectionStatus
+                  ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                  : "bg-zinc-800/50 text-zinc-400 border-zinc-800"
+              }`}
+            >
+              <span
+                className={`w-2 h-2 rounded-full shrink-0 ${
+                  isTestingConnection
+                    ? "bg-amber-400 animate-pulse"
+                    : connectionStatus?.ok
+                    ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]"
+                    : connectionStatus
+                    ? "bg-rose-400"
+                    : "bg-zinc-500"
+                }`}
+              />
+              <span className="truncate max-w-[140px] lg:max-w-none">
+                {isTestingConnection
+                  ? "Pinging..."
+                  : connectionStatus?.ok
+                  ? `Connected (${connectionStatus.latencyMs}ms)`
+                  : connectionStatus
+                  ? "Offline"
+                  : "Configure Relay"}
+              </span>
+            </button>
+          )}
 
           {/* Reset parameters button */}
           <button
@@ -265,115 +307,157 @@ export const Navbar: React.FC<NavbarProps> = ({
             <RotateCcw className="w-4 h-4" />
           </button>
 
-          {/* Raw Graph Inspector */}
-          <button
-            type="button"
-            onClick={onOpenGraph}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-300 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition-colors"
-          >
-            <Network className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Graph Inspector</span>
-          </button>
+          {!isPublicMode && (
+            <>
+              {/* Raw Graph Inspector */}
+              <button
+                type="button"
+                onClick={onOpenGraph}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-300 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition-colors"
+              >
+                <Network className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Graph Inspector</span>
+              </button>
 
-          {/* Export API & Code */}
-          <button
-            type="button"
-            onClick={onOpenExport}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition-colors"
-          >
-            <Code2 className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Export API</span>
-          </button>
+              {/* Export API & Code */}
+              <button
+                type="button"
+                onClick={onOpenExport}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition-colors"
+              >
+                <Code2 className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Export API</span>
+              </button>
 
-          {/* Settings Button */}
-          <button
-            type="button"
-            onClick={onOpenSettings}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 shadow-sm shadow-indigo-500/25 transition-all active:scale-95"
-            title="Relay & Connection Settings"
-          >
-            <Settings className="w-3.5 h-3.5" />
-            <span>Settings</span>
-          </button>
+              {/* Settings Button */}
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 shadow-sm shadow-indigo-500/25 transition-all active:scale-95"
+                title="Relay & Connection Settings"
+              >
+                <Settings className="w-3.5 h-3.5" />
+                <span>Settings</span>
+              </button>
+            </>
+          )}
         </div>
 
         {/* Right Mobile Actions */}
         <div className="flex md:hidden items-center gap-1.5">
-          {/* Page tabs (compact) */}
-          <div className="flex items-center p-0.5 rounded-lg bg-zinc-900 border border-zinc-800">
-            <button
-              type="button"
-              onClick={() => onNavigate("generate")}
-              className={`px-2 py-1 rounded-md text-[10px] font-semibold ${
-                activePage === "generate" ? "bg-indigo-600 text-white" : "text-zinc-400"
-              }`}
-              title="Generate page"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => onNavigate("edit")}
-              className={`px-2 py-1 rounded-md text-[10px] font-semibold ${
-                activePage === "edit" ? "bg-fuchsia-600 text-white" : "text-zinc-400"
-              }`}
-              title="Identity Edit page"
-            >
-              <Wand2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          {/* Quick status dot button */}
-          <button
-            type="button"
-            onClick={onOpenSettings}
-            className={`flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium border ${
-              connectionStatus?.ok
-                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                : connectionStatus
-                ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
-                : "bg-zinc-800/50 text-zinc-400 border-zinc-800"
-            }`}
-          >
-            <span
-              className={`w-1.5 h-1.5 rounded-full ${
-                connectionStatus?.ok
-                  ? "bg-emerald-400"
-                  : connectionStatus
-                  ? "bg-rose-400"
-                  : "bg-zinc-500"
-              }`}
-            />
-            <span>{connectionStatus?.ok ? "Online" : "Offline"}</span>
-          </button>
+          {isPublicMode ? (
+            <>
+              {/* Quick status badge */}
+              <div
+                className={`flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium border ${
+                  connectionStatus?.ok
+                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                    : connectionStatus
+                    ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                    : "bg-zinc-800/50 text-zinc-400 border-zinc-800"
+                }`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    connectionStatus?.ok
+                      ? "bg-emerald-400"
+                      : connectionStatus
+                      ? "bg-rose-400"
+                      : "bg-zinc-500"
+                  }`}
+                />
+                <span>{connectionStatus?.ok ? "Online" : "Offline"}</span>
+              </div>
 
-          {/* Mobile Settings Icon button */}
-          <button
-            type="button"
-            onClick={onOpenSettings}
-            className="p-1.5 rounded-lg text-zinc-300 hover:text-white bg-zinc-900 border border-zinc-800"
-            title="Settings"
-          >
-            <Settings className="w-4 h-4 text-indigo-400" />
-          </button>
+              {/* Reset button for mobile public users */}
+              <button
+                type="button"
+                onClick={onResetParams}
+                title="Reset parameters to defaults"
+                className="p-1.5 rounded-lg text-zinc-300 hover:text-white bg-zinc-900 border border-zinc-800"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Page tabs (compact) */}
+              <div className="flex items-center p-0.5 rounded-lg bg-zinc-900 border border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => onNavigate("generate")}
+                  className={`px-2 py-1 rounded-md text-[10px] font-semibold ${
+                    activePage === "generate" ? "bg-indigo-600 text-white" : "text-zinc-400"
+                  }`}
+                  title="Generate page"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigate("edit")}
+                  className={`px-2 py-1 rounded-md text-[10px] font-semibold ${
+                    activePage === "edit" ? "bg-fuchsia-600 text-white" : "text-zinc-400"
+                  }`}
+                  title="Identity Edit page"
+                >
+                  <Wand2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              {/* Quick status dot button */}
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className={`flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium border ${
+                  connectionStatus?.ok
+                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                    : connectionStatus
+                    ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                    : "bg-zinc-800/50 text-zinc-400 border-zinc-800"
+                }`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    connectionStatus?.ok
+                      ? "bg-emerald-400"
+                      : connectionStatus
+                      ? "bg-rose-400"
+                      : "bg-zinc-500"
+                  }`}
+                />
+                <span>{connectionStatus?.ok ? "Online" : "Offline"}</span>
+              </button>
 
-          {/* Mobile Hamburger Toggle */}
-          <button
-            type="button"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-1.5 rounded-lg text-zinc-300 hover:text-white bg-zinc-900 border border-zinc-800 transition-colors"
-            aria-label="Toggle Navigation Menu"
-          >
-            {isMobileMenuOpen ? (
-              <X className="w-4 h-4 text-zinc-200" />
-            ) : (
-              <Menu className="w-4 h-4 text-zinc-200" />
-            )}
-          </button>
+              {/* Mobile Settings Icon button */}
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="p-1.5 rounded-lg text-zinc-300 hover:text-white bg-zinc-900 border border-zinc-800"
+                title="Settings"
+              >
+                <Settings className="w-4 h-4 text-indigo-400" />
+              </button>
+
+              {/* Mobile Hamburger Toggle */}
+              <button
+                type="button"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="p-1.5 rounded-lg text-zinc-300 hover:text-white bg-zinc-900 border border-zinc-800 transition-colors"
+                aria-label="Toggle Navigation Menu"
+              >
+                {isMobileMenuOpen ? (
+                  <X className="w-4 h-4 text-zinc-200" />
+                ) : (
+                  <Menu className="w-4 h-4 text-zinc-200" />
+                )}
+              </button>
+            </>
+          )}
         </div>
       </div>
 
       {/* Mobile Visual Novel compact workflow tabs */}
-      {activePage === "novel" && onVnTabChange && (
+      {!isPublicMode && activePage === "novel" && onVnTabChange && (
         <div className="md:hidden mt-2 pt-1.5 border-t border-zinc-800/80 flex items-center justify-between gap-1 overflow-x-auto pb-0.5">
           <button
             type="button"
@@ -457,7 +541,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       )}
 
       {/* Mobile Collapsible Menu */}
-      {isMobileMenuOpen && (
+      {!isPublicMode && isMobileMenuOpen && (
         <div className="md:hidden mt-2 pt-2 border-t border-zinc-800/80 flex flex-col gap-1.5 animate-in slide-in-from-top-2 duration-150">
           {/* Page navigation */}
           <div className="flex gap-1.5">

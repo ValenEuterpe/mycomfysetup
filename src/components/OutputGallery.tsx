@@ -42,6 +42,7 @@ interface OutputGalleryProps {
   onToggleLayoutMode?: () => void;
   onSelectHistoryItem: (item: GenerationHistoryItem) => void;
   onClearHistory: () => void;
+  isPublic?: boolean;
 }
 
 export const OutputGallery: React.FC<OutputGalleryProps> = ({
@@ -56,6 +57,7 @@ export const OutputGallery: React.FC<OutputGalleryProps> = ({
   onToggleLayoutMode,
   onSelectHistoryItem,
   onClearHistory,
+  isPublic = false,
 }) => {
   const [copied, setCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -336,14 +338,16 @@ export const OutputGallery: React.FC<OutputGalleryProps> = ({
                 <Download className="w-4 h-4" />
               </button>
 
-              <button
-                type="button"
-                onClick={() => setEntitySaveOpen(true)}
-                title="Save as entity (usable as scene or reference in Identity Edit)"
-                className="p-2 rounded-lg text-zinc-300 hover:text-indigo-300 hover:bg-indigo-500/10 transition-colors"
-              >
-                <UserRoundPlus className="w-4 h-4" />
-              </button>
+              {!isPublic && (
+                <button
+                  type="button"
+                  onClick={() => setEntitySaveOpen(true)}
+                  title="Save as entity (usable as scene or reference in Identity Edit)"
+                  className="p-2 rounded-lg text-zinc-300 hover:text-indigo-300 hover:bg-indigo-500/10 transition-colors"
+                >
+                  <UserRoundPlus className="w-4 h-4" />
+                </button>
+              )}
 
               <button
                 type="button"
@@ -466,13 +470,15 @@ export const OutputGallery: React.FC<OutputGalleryProps> = ({
       </div>
 
       {/* Save the current output as a reusable entity */}
-      <SaveEntityModal
-        media={currentMedia}
-        open={entitySaveOpen}
-        onClose={() => setEntitySaveOpen(false)}
-        createEntityFromMediaId={createEntityFromMediaId}
-        createEntityFromBlob={createEntity}
-      />
+      {!isPublic && (
+        <SaveEntityModal
+          media={currentMedia}
+          open={entitySaveOpen}
+          onClose={() => setEntitySaveOpen(false)}
+          createEntityFromMediaId={createEntityFromMediaId}
+          createEntityFromBlob={createEntity}
+        />
+      )}
     </div>
   );
 };
