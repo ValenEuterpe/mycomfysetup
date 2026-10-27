@@ -1,5 +1,13 @@
 import { Env } from "./comfy";
-import { getWorkflow, DEFAULT_WORKFLOW_ID } from "./workflows";
+import {
+  getWorkflow,
+  DEFAULT_WORKFLOW_ID,
+  ANIMA_PREFILL,
+  ANIMA_NEGATIVE,
+  BotWorkflow,
+  supportsWorkflowPrefill,
+  supportsWorkflowNegative,
+} from "./workflows";
 
 /**
  * Per-chat settings for the Telegram bot, persisted in the
@@ -28,13 +36,38 @@ const keyFor = (chatId: string | number) => `tg:${chatId}`;
 const awaitKeyFor = (chatId: string | number) => `tg:${chatId}:await`;
 const lastKeyFor = (chatId: string | number) => `tg:${chatId}:last`;
 
+/**
+ * Canonical default settings for a Telegram chat:
+ * Model: Anima Base (T2I)
+ * Ratio: 1:1
+ * Prefill (Prefix): ANIMA_PREFILL
+ * Negative: ANIMA_NEGATIVE
+ */
 export function defaultSettings(): ChatSettings {
-  const wf = getWorkflow(DEFAULT_WORKFLOW_ID);
   return {
     modelId: DEFAULT_WORKFLOW_ID,
     ratio: "1:1",
-    prefill: wf?.prefillDefault ?? "",
-    negative: wf?.negativeDefault ?? "",
+    prefill: ANIMA_PREFILL,
+    negative: ANIMA_NEGATIVE,
+  };
+}
+
+/**
+ * Resolves the effective prompt prefix and negative prompt for a workflow.
+ * Anima models use the stored prefill/negative (falling back to Anima defaults).
+ * Non-Anima models (such as Krea) return undefined for both, ensuring no
+ * prefix and no negative prompt are ever shared or applied.
+ */
+export function getEffectivePromptSettings(
+  s: ChatSettings,
+  wf: BotWorkflow
+): { prefill?: string; negative?: string } {
+  const hasPrefill = supportsWorkflowPrefill(wf);
+  const hasNegative = supportsWorkflowNegative(wf);
+
+  return {
+    prefill: hasPrefill ? (s.prefill || wf.prefillDefault) : undefined,
+    negative: hasNegative ? (s.negative || wf.negativeDefault) : undefined,
   };
 }
 

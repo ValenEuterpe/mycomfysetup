@@ -13,6 +13,8 @@ import {
   resolveRatio,
   generateRandomSeed,
   DEFAULT_WORKFLOW_ID,
+  supportsWorkflowPrefill,
+  supportsWorkflowNegative,
 } from "../lib/workflows";
 import {
   getSettings,
@@ -24,6 +26,7 @@ import {
   getLastRun,
   ChatSettings,
   LastRun,
+  getEffectivePromptSettings,
 } from "../lib/settings";
 import {
   sendTelegramMessage,
@@ -66,15 +69,16 @@ const BOT_COMMANDS: { command: string; description: string }[] = [
   { command: "models", description: "Model picker" },
   { command: "model", description: "Set model directly: /model anima" },
   { command: "ratio", description: "Aspect ratio gallery" },
-  { command: "prefill", description: "Edit the anima prefill" },
-  { command: "negative", description: "Edit the anima negative prompt" },
+  { command: "prefill", description: "Edit the Anima prefix" },
+  { command: "negative", description: "Edit the Anima negative prompt" },
+  { command: "reset", description: "Reset settings to defaults" },
   { command: "edit", description: "Edit a photo: /edit starts the guided flow" },
   { command: "gen", description: "One-shot generation: /gen [model] <prompt>" },
   { command: "help", description: "Usage help" },
 ];
 
-/** Bump to force a re-install of the slash-command menu (e.g. after adding /edit). */
-const COMMANDS_VERSION = "2";
+/** Bump to force a re-install of the slash-command menu (e.g. after adding /reset). */
+const COMMANDS_VERSION = "3";
 
 async function ensureCommandsInstalled(env: Env, token: string): Promise<void> {
   if (!env.TELEGRAM_SETTINGS) return;
@@ -161,16 +165,30 @@ const RESULT_ROWS: KbRow[] = [
   ],
 ];
 
-const PANEL_ROWS: KbRow[] = [
-  WRITE_PROMPT_ROW,
-  [["🎨 Model — ▸", "pick:model"]],
-  [["📐 Ratio — ▸", "pick:ratio"]],
-  [
-    ["✨ Edit prefill", "edit:prefill"],
-    ["🚫 Edit negative", "edit:negative"],
-  ],
-  [["♻️ Reset all", "reset"]],
-];
+export function panelMarkup(s: ChatSettings): Record<string, any> {
+  const model = getWorkflow(s.modelId) ?? getWorkflow(DEFAULT_WORKFLOW_ID);
+  const rows: KbRow[] = [
+    WRITE_PROMPT_ROW,
+    [["🎨 Model — ▸", "pick:model"]],
+    [["📐 Ratio — ▸", "pick:ratio"]],
+  ];
+
+  if (model && (supportsWorkflowPrefill(model) || supportsWorkflowNegative(model))) {
+    const editRow: [string, string][] = [];
+    if (supportsWorkflowPrefill(model)) {
+      editRow.push(["✨ Edit prefix", "edit:prefill"]);
+    }
+    if (supportsWorkflowNegative(model)) {
+      editRow.push(["🚫 Edit negative", "edit:negative"]);
+    }
+    if (editRow.length > 0) {
+      rows.push(editRow);
+    }
+  }
+
+  rows.push([["♻️ Reset to defaults", "reset"]]);
+  return inlineKeyboard(rows);
+}
 
 async function warnNoKV(token: string, chatId: number, env: Env): Promise<void> {
   if (env.TELEGRAM_SETTINGS) return;
@@ -182,36 +200,48 @@ async function warnNoKV(token: string, chatId: number, env: Env): Promise<void> 
   );
 }
 
-function panelText(s: ChatSettings): string {
+export function panelText(s: ChatSettings): string {
   const model = getWorkflow(s.modelId) ?? getWorkflow(DEFAULT_WORKFLOW_ID);
   const ratio = resolveRatio(s.ratio);
-  const prefillLabel = s.prefill
-    ? `<code>${escapeHtml(clamp(s.prefill))}</code>`
-    : "<i>off</i>";
-  const negativeLabel = s.negative
-    ? `<code>${escapeHtml(clamp(s.negative))}</code>`
-    : "<i>off</i>";
   const ratioLine = ratio
     ? `${ratioGlyph(ratio)} <b>${escapeHtml(s.ratio)}</b> <i>(${ratio.width}×${ratio.height})</i>`
     : escapeHtml(s.ratio);
-  return [
+
+  const lines = [
     `🎛 <b>Bot Settings</b>`,
     `<i>Your choices apply to every generation until you change them.</i>`,
     ``,
     `🎨 <b>Model</b>: ${escapeHtml(model?.displayName ?? s.modelId)}`,
     `📐 <b>Ratio</b>: ${ratioLine}`,
-    `✨ <b>Prefill</b>: ${prefillLabel}`,
-    `🚫 <b>Negative</b>: ${negativeLabel}`,
-    ``,
-    `✍️ Send any text to generate instantly with these settings.`,
-  ].join("\n");
+  ];
+
+  if (model && supportsWorkflowPrefill(model)) {
+    const prefillLabel = s.prefill
+      ? `<code>${escapeHtml(clamp(s.prefill))}</code>`
+      : "<i>off</i>";
+    lines.push(`✨ <b>Prefix</b>: ${prefillLabel}`);
+  } else {
+    lines.push(`✨ <b>Prefix</b>: <i>none (Krea clean prompt)</i>`);
+  }
+
+  if (model && supportsWorkflowNegative(model)) {
+    const negativeLabel = s.negative
+      ? `<code>${escapeHtml(clamp(s.negative))}</code>`
+      : "<i>off</i>";
+    lines.push(`🚫 <b>Negative</b>: ${negativeLabel}`);
+  } else {
+    lines.push(`🚫 <b>Negative</b>: <i>none (not supported)</i>`);
+  }
+
+  lines.push(``, `✍️ Send any text to generate instantly with these settings.`);
+  return lines.join("\n");
 }
 
 async function sendPanel(env: Env, chatId: number, token: string): Promise<void> {
   const s = await getSettings(env, chatId);
   await sendTelegramMessage(token, chatId, panelText(s), {
     parseMode: "HTML",
-    replyMarkup: inlineKeyboard(PANEL_ROWS),
+    replyMarkup: panelMarkup(s),
   });
 }
 
@@ -303,7 +333,7 @@ async function beginFieldEdit(
   const current = field === "prefill" ? s.prefill : s.negative;
   const title =
     field === "prefill"
-      ? `✨ <b>Anima prefill</b>`
+      ? `✨ <b>Anima prefix</b>`
       : `🚫 <b>Anima negative prompt</b>`;
   await sendTelegramMessage(
     token,
@@ -321,7 +351,7 @@ async function beginFieldEdit(
       parseMode: "HTML",
       replyMarkup: forceReplyMarkup(
         field === "prefill"
-          ? "new prefill (or: reset / (clear))"
+          ? "new prefix (or: reset / (clear))"
           : "new negative (or: reset / (clear))"
       ),
     }
@@ -348,7 +378,7 @@ async function applyFieldInput(
   }
   const persisted = await saveSettings(env, chatId, { [field]: value });
   if (!persisted) await warnNoKV(token, chatId, env);
-  const label = field === "prefill" ? `✨ <b>Prefill</b>` : `🚫 <b>Negative</b>`;
+  const label = field === "prefill" ? `✨ <b>Anima prefix</b>` : `🚫 <b>Anima negative</b>`;
   await sendTelegramMessage(
     token,
     chatId,
@@ -403,8 +433,12 @@ async function runGeneration(
 
   const ratio = resolveRatio(run.stored.ratio) ?? resolveRatio("1:1")!;
   const seed = run.seed || generateRandomSeed();
+
+  // Resolve model-specific prompt modifiers strictly (Anima gets prefix/negative; Krea gets neither)
+  const effective = getEffectivePromptSettings(run.stored, wf);
   const negative =
-    wf.supportsNegativePrompt ? run.negativeOverride ?? run.stored.negative : undefined;
+    wf.supportsNegativePrompt ? run.negativeOverride ?? effective.negative : undefined;
+  const prefill = effective.prefill;
 
   const statusId = await sendTelegramMessage(
     token,
@@ -417,7 +451,7 @@ async function runGeneration(
     const workflow = buildInjectedWorkflow(wf, {
       positive,
       negative,
-      prefill: run.stored.prefill,
+      prefill,
       seed,
       width: ratio.width,
       height: ratio.height,
@@ -746,7 +780,7 @@ async function handleCallbackQuery(
       } else {
         await editTelegramMessage(token, chatId, messageId, panelText(settings), {
           parseMode: "HTML",
-          replyMarkup: inlineKeyboard(PANEL_ROWS),
+          replyMarkup: panelMarkup(settings),
         });
       }
       break;
@@ -769,12 +803,13 @@ async function handleCallbackQuery(
       if (!wf) break;
       const persisted = await saveSettings(env, chatId, { modelId: wf.id });
       if (!persisted) await warnNoKV(token, chatId, env);
+      const updatedSettings = await getSettings(env, chatId);
       await editTelegramMessage(
         token,
         chatId,
         messageId,
-        `🎨 <b>Model set to</b> ${escapeHtml(wf.displayName)}${persisted ? "" : "\n⚠️ <i>(not persisted — KV binding missing)</i>"}`,
-        { parseMode: "HTML", replyMarkup: inlineKeyboard(HOME_ROWS) }
+        panelText(updatedSettings),
+        { parseMode: "HTML", replyMarkup: panelMarkup(updatedSettings) }
       );
       break;
     }
@@ -807,19 +842,40 @@ async function handleCallbackQuery(
 
     case data === "edit:prefill":
     case data === "edit:negative": {
-      await beginFieldEdit(env, chatId, token, data === "edit:prefill" ? "prefill" : "negative");
+      const field = data === "edit:prefill" ? "prefill" : "negative";
+      const wf = getWorkflow(settings.modelId);
+      if (field === "prefill" && !supportsWorkflowPrefill(wf || settings.modelId)) {
+        await sendTelegramMessage(
+          token,
+          chatId,
+          `ℹ️ <b>${escapeHtml(wf?.displayName || "Krea")}</b> does not use a prompt prefix. Prefix settings apply only to Anima models (<code>/model anima</code>).`,
+          { parseMode: "HTML", replyMarkup: inlineKeyboard(HOME_ROWS) }
+        );
+        break;
+      }
+      if (field === "negative" && !supportsWorkflowNegative(wf || settings.modelId)) {
+        await sendTelegramMessage(
+          token,
+          chatId,
+          `ℹ️ <b>${escapeHtml(wf?.displayName || "Krea")}</b> does not support negative prompts. Negative prompt settings apply only to Anima models (<code>/model anima</code>).`,
+          { parseMode: "HTML", replyMarkup: inlineKeyboard(HOME_ROWS) }
+        );
+        break;
+      }
+      await beginFieldEdit(env, chatId, token, field);
       break;
     }
 
     case data === "reset": {
       const persisted = await resetSettings(env, chatId);
       if (!persisted) await warnNoKV(token, chatId, env);
+      const fresh = await getSettings(env, chatId);
       await editTelegramMessage(
         token,
         chatId,
         messageId,
-        `♻️ <b>Settings reset to defaults</b>${persisted ? "" : "\n⚠️ <i>(not persisted — KV binding missing)</i>"}`,
-        { parseMode: "HTML", replyMarkup: inlineKeyboard(HOME_ROWS) }
+        `♻️ <b>Settings reset to defaults!</b>${persisted ? "" : "\n⚠️ <i>(not persisted — KV binding missing)</i>"}\n\n${panelText(fresh)}`,
+        { parseMode: "HTML", replyMarkup: panelMarkup(fresh) }
       );
       break;
     }
@@ -978,12 +1034,26 @@ async function handleMessage(
         `🎛 <b>/settings</b> — pick model, ratio, prompts`,
         `✍️ <b>Plain text</b> — generate instantly with saved settings`,
         `🅿️ <b>/gen</b> <code>[model] &lt;prompt&gt; [| negative]</code> — one-shot overrides`,
-        `♻️ <b>Regenerate</b> button under every result`,
+        `♻️ <b>/reset</b> — reset settings to default (Anima, 1:1, default prefix/negative)`,
         `🎨 <b>/models</b> · 📐 <b>/ratio</b> · ✨ <b>/prefill</b> · 🚫 <b>/negative</b>`,
       ].join("\n"),
       { parseMode: "HTML", replyMarkup: inlineKeyboard(HOME_ROWS) }
     );
     await warnNoKV(token, chatId, env);
+    return;
+  }
+
+  // /reset — reset settings to default
+  if (lower === "/reset" || lower.startsWith("/reset ") || lower.startsWith("/reset@")) {
+    const persisted = await resetSettings(env, chatId);
+    if (!persisted) await warnNoKV(token, chatId, env);
+    const fresh = await getSettings(env, chatId);
+    await sendTelegramMessage(
+      token,
+      chatId,
+      `♻️ <b>Settings reset to defaults!</b>${persisted ? "" : "\n⚠️ <i>(not persisted)</i>"}\n\n${panelText(fresh)}`,
+      { parseMode: "HTML", replyMarkup: panelMarkup(fresh) }
+    );
     return;
   }
 
@@ -1053,12 +1123,34 @@ async function handleMessage(
     return;
   }
 
-  // /prefill, /negative — ForceReply edit
+  // /prefill, /negative — ForceReply edit (Anima only)
   if (lower.startsWith("/prefill")) {
+    const currentSettings = await getSettings(env, chatId);
+    const wf = getWorkflow(currentSettings.modelId);
+    if (!supportsWorkflowPrefill(wf || currentSettings.modelId)) {
+      await sendTelegramMessage(
+        token,
+        chatId,
+        `ℹ️ <b>${escapeHtml(wf?.displayName || "Krea")}</b> does not use a prompt prefix. Prefix settings apply only to Anima models (<code>/model anima</code>).`,
+        { parseMode: "HTML", replyMarkup: inlineKeyboard(HOME_ROWS) }
+      );
+      return;
+    }
     await beginFieldEdit(env, chatId, token, "prefill");
     return;
   }
   if (lower.startsWith("/negative")) {
+    const currentSettings = await getSettings(env, chatId);
+    const wf = getWorkflow(currentSettings.modelId);
+    if (!supportsWorkflowNegative(wf || currentSettings.modelId)) {
+      await sendTelegramMessage(
+        token,
+        chatId,
+        `ℹ️ <b>${escapeHtml(wf?.displayName || "Krea")}</b> does not support negative prompts. Negative prompt settings apply only to Anima models (<code>/model anima</code>).`,
+        { parseMode: "HTML", replyMarkup: inlineKeyboard(HOME_ROWS) }
+      );
+      return;
+    }
     await beginFieldEdit(env, chatId, token, "negative");
     return;
   }

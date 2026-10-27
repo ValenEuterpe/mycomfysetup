@@ -49,9 +49,9 @@ export interface BotWorkflow {
   outputNodes: string[];
 }
 
-const ANIMA_PREFILL = "masterpiece, best quality, score_9, score_8, safe, @silvana,";
+export const ANIMA_PREFILL = "masterpiece, best quality, score_9, score_8, safe, @silvana,";
 
-const ANIMA_NEGATIVE =
+export const ANIMA_NEGATIVE =
   "worst quality, low quality, score_1, score_2, score_3, too many fingers, deformed hand, too many arms, ugly, uncanny valley";
 
 const WORKFLOWS: BotWorkflow[] = [
@@ -118,6 +118,21 @@ export const DEFAULT_WORKFLOW_ID = "anima";
 
 export function getWorkflow(id: string): BotWorkflow | undefined {
   return WORKFLOWS.find((w) => w.id === id.toLowerCase().trim());
+}
+
+export function isAnimaWorkflow(wf: BotWorkflow | string): boolean {
+  const id = typeof wf === "string" ? wf.toLowerCase().trim() : wf.id.toLowerCase().trim();
+  return id.startsWith("anima");
+}
+
+export function supportsWorkflowPrefill(wf: BotWorkflow | string): boolean {
+  const workflow = typeof wf === "string" ? getWorkflow(wf) : wf;
+  return Boolean(workflow?.prefillDefault);
+}
+
+export function supportsWorkflowNegative(wf: BotWorkflow | string): boolean {
+  const workflow = typeof wf === "string" ? getWorkflow(wf) : wf;
+  return Boolean(workflow?.supportsNegativePrompt);
 }
 
 export function listWorkflows(): {
