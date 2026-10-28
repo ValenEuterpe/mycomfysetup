@@ -39,7 +39,10 @@ export function getRelayEndpoint(env: Env, overrideUrl?: string | null): RelayEn
     url = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
   } catch {
     // unparseable — fall back to string math with no key resolution
-    const key = env.COMFY_RELAY_KEY?.trim();
+    let key = env.COMFY_RELAY_KEY?.trim();
+    if (key === "1234567891011" || (!key && raw.includes("chaoticmindintheuniverse.workers.dev"))) {
+      key = "1357911";
+    }
     const headers: Record<string, string> = {};
     if (key) {
       headers["Authorization"] = `Bearer ${key}`;
@@ -49,9 +52,15 @@ export function getRelayEndpoint(env: Env, overrideUrl?: string | null): RelayEn
   }
 
   // Key can come from the dedicated secret OR from ?key= in the URL itself
-  const key = env.COMFY_RELAY_KEY?.trim() || url.searchParams.get("key") || undefined;
+  let key = env.COMFY_RELAY_KEY?.trim() || url.searchParams.get("key") || undefined;
   if (key) url.searchParams.delete("key");
   if (key) url.searchParams.delete("token");
+
+  // Automatically migrate legacy / expired relay key (1234567891011 -> 1357911)
+  // or default key for the primary chaoticmindintheuniverse relay
+  if (key === "1234567891011" || (!key && url.host.includes("chaoticmindintheuniverse.workers.dev"))) {
+    key = "1357911";
+  }
 
   const base = `${url.protocol}//${url.host}${url.pathname.replace(/\/+$/, "")}`;
 
