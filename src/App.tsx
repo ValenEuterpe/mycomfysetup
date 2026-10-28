@@ -44,6 +44,7 @@ import { GraphInspectorModal } from "./components/GraphInspectorModal";
 import { DeliveryToggles } from "./components/DeliveryToggles";
 import { IdentityEditPage } from "./pages/IdentityEditPage";
 import { VisualNovelPage } from "./pages/VisualNovelPage";
+import { ApiDocsPage } from "./pages/ApiDocsPage";
 import { VNTab } from "./types/visualNovel";
 
 /** Reads the current hash or path route; unknown -> generate. */
@@ -51,10 +52,12 @@ function readCurrentPage(): StudioPage {
   const path = location.pathname.toLowerCase();
   if (path.startsWith("/public")) return "public";
   if (path.startsWith("/novel") || path.startsWith("/vn")) return "novel";
+  if (path.startsWith("/docs")) return "docs";
   const hash = location.hash.replace(/^#\/?/, "").toLowerCase();
   if (hash === "public") return "public";
   if (hash === "edit") return "edit";
   if (hash === "novel" || hash === "vn") return "novel";
+  if (hash === "docs") return "docs";
   return "generate";
 }
 
@@ -114,6 +117,8 @@ export const App: React.FC = () => {
         ? "#/edit"
         : next === "novel"
         ? "#/novel"
+        : next === "docs"
+        ? "#/docs"
         : "#/generate";
     // hashchange listener keeps state in sync; set directly too in case hash is unchanged
     setPage(next);
@@ -201,10 +206,13 @@ export const App: React.FC = () => {
         if (!res.ok) return; // 401 = password gate not passed yet
         const cfg = await res.json();
         if (cfg?.configured && cfg.endpoint) {
-          const withKey = cfg.key ? `${cfg.endpoint}?key=${encodeURIComponent(cfg.key)}` : cfg.endpoint;
-          setEndpoint(withKey);
-          saveEndpoint(withKey);
-          handleTestConnection(withKey);
+          const savedCustom = localStorage.getItem("comfy_studio_endpoint");
+          if (!savedCustom) {
+            const withKey = cfg.key ? `${cfg.endpoint}?key=${encodeURIComponent(cfg.key)}` : cfg.endpoint;
+            setEndpoint(withKey);
+            saveEndpoint(withKey);
+            handleTestConnection(withKey);
+          }
         }
       } catch {
         // config endpoint unavailable — keep localStorage endpoint
@@ -531,7 +539,9 @@ export const App: React.FC = () => {
         vnSceneCount={vnSceneCount}
       />
 
-      {page === "edit" ? (
+      {page === "docs" ? (
+        <ApiDocsPage onBackToStudio={() => navigate("generate")} endpoint={endpoint} />
+      ) : page === "edit" ? (
         <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col gap-5">
           <IdentityEditPage
             endpoint={endpoint}

@@ -15,7 +15,7 @@ const STORAGE_KEYS = {
 };
 
 export const DEFAULT_ENDPOINT =
-  "https://comfy-relay.chaoticmindintheuniverse.workers.dev/?key=somepersonalkeymaybeher";
+  "https://comfy-relay.chaoticmindintheuniverse.workers.dev?key=1357911";
 
 export interface WorkflowPreset {
   id: string;

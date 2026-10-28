@@ -1,6 +1,7 @@
 import { ComfyWorkflowGraph, ExtractedParameter } from "../types/workflow";
 import { injectWorkflowParameters } from "./workflowInjector";
 import { buildComfyUrl } from "./comfyClient";
+import { DEFAULT_ENDPOINT } from "./storage";
 
 /**
  * Generates a ready-to-run cURL command to submit the workflow.
@@ -154,51 +155,84 @@ export function generateJsonSchema(parameters: ExtractedParameter[]): object {
  * Generates an OpenAI-compatible /v1 usage guide (curl) targeting this
  * site's public API: GET /v1/models + POST /v1/images/generations.
  */
-export function generateOpenAiV1Code(origin: string): string {
+export function generateOpenAiV1Code(origin: string, endpoint?: string): string {
   const base = (origin.trim() || "https://your-site.pages.dev").replace(/\/+$/, "");
+  const activeRelay = endpoint?.trim() || DEFAULT_ENDPOINT;
 
   return `# OpenAI-compatible Image API
 # Endpoint: POST ${base}/v1/images/generations
-# Compatible with SillyTavern, TavoAI and any OpenAI SDK image client.
+# Configured Relay Endpoint: ${activeRelay}
+# Documentation: ${base}/#/docs
+# OpenAPI Spec: ${base}/v1/openapi.json
+# Compatible with OpenAI SDK, Cursor, AutoGen, SillyTavern, and custom AI agents.
 
-## 1) List available models
+## 1) List available models & parameter schemas
 curl "${base}/v1/models"
 
-## 2) Generate an image (waits synchronously for completion)
+## 2) Generate with Anima Base (T2I)
 curl -X POST "${base}/v1/images/generations" \\
   -H "Content-Type: application/json" \\
   -d '{
     "model": "anima",
-    "prompt": "a cozy classroom, warm sunlight",
-    "size": "1024x1024",
+    "prompt": "a cozy classroom, warm sunlight, anime aesthetic",
+    "negative_prompt": "blurry, low quality, deformed hands",
+    "size": "16:9",
+    "steps": 30,
+    "cfg_scale": 4.0,
     "response_format": "url"
   }'
 
-## Request parameters
-{
-  "model":            "anima" (default) | "kroma",
-  "prompt":           "required — '|' or '||' separates a negative prompt",
-  "negative_prompt":  "optional — defaults to the workflow's own negative",
-  "size":             "1024x1024" | "1792x1024" | "1024x1792" | "16:9"
-                      (snapped to the workflow's nearest supported ratio),
-  "response_format":  "url" (default, link to the finished image)
-                      | "b64_json" (inline image data),
-  "seed":             "optional integer for reproducible results",
-  "n":                "must be 1 (one image per request)",
-  "prefill":          "true (default) applies the workflow quality prefill; false to disable"
-}
+## 3) Generate with Kroma (Krea-2 Photorealism + 2x Upscale)
+# Note: Kroma operates at CFG 1 and takes only positive prompts.
+curl -X POST "${base}/v1/images/generations" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "kroma",
+    "prompt": "vintage classic roadster parked on a rainy city street, cinematic photo",
+    "size": "16:9",
+    "steps": 8,
+    "upscale_steps": 4
+  }'
 
-## Response (url format)
-{
-  "created": 1710000000,
-  "data": [{ "url": "https://<relay>/view?filename=...&subfolder=&type=output" }]
-}
+## 4) Generate with Anima Sticker (Cutout + Outline Highlight)
+curl -X POST "${base}/v1/images/generations" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "sticker",
+    "prompt": "cute magical anime chibi character holding a star wand",
+    "negative_prompt": "blurry, low quality",
+    "size": "1:1",
+    "outline_width": 3,
+    "outline_color": "#FFFFFF"
+  }'
 
-## Python (OpenAI SDK)
+## Request Parameters Overview:
+# {
+#   "model":            "anima" | "kroma" (or "krea") | "anima-sticker" (or "sticker"),
+#   "prompt":           "required text description",
+#   "negative_prompt":  "optional (supported by 'anima' and 'anima-sticker'; ignored by 'kroma')",
+#   "size":             "1024x1024" | "16:9" | "9:16" | "4:3" | "3:4" | "21:9",
+#   "steps":            "integer diffusion steps (1..150, default: 30 for anima, 8 for kroma)",
+#   "cfg_scale":        "guidance scale (0.5..30.0, default: 4.0)",
+#   "seed":             "integer seed for reproducible results",
+#   "outline_width":    "integer outline thickness in px for stickers (default: 2, 0=clean alpha)",
+#   "outline_color":    "hex color string for sticker outline (default: '#FFFFFF')",
+#   "sensitivity":      "RMBG-2.0 matting sensitivity (0.1..5.0, default: 1.0)",
+#   "prefill":          "true (default) applies Anima quality prefill tags; false to disable",
+#   "response_format":  "url" (default) | "b64_json"
+# }
+
+## Python (OpenAI SDK) Example:
 from openai import OpenAI
+
 client = OpenAI(base_url="${base}/v1", api_key="not-needed")
-img = client.images.generate(model="anima", prompt="night city skyline", size="1024x1024")
-print(img.data[0].url)
+img = client.images.generate(
+    model="anima",
+    prompt="night city skyline with glowing neon signs",
+    size="16:9",
+    extra_body={"negative_prompt": "blurry, low quality", "steps": 30, "cfg_scale": 4.0}
+)
+print("Result URL:", img.data[0].url)
 `;
 }
 
@@ -210,6 +244,7 @@ export function generateOpenApiSpec(
   parameters: ExtractedParameter[]
 ): object {
   const jsonSchema = generateJsonSchema(parameters);
+  const activeRelay = endpoint?.trim() || DEFAULT_ENDPOINT;
 
   return {
     openapi: "3.0.3",
@@ -220,8 +255,8 @@ export function generateOpenApiSpec(
     },
     servers: [
       {
-        url: endpoint.trim() || "https://comfy-relay.example.com",
-        description: "ComfyUI Relay Server",
+        url: activeRelay,
+        description: "Configured ComfyUI Relay Server",
       },
     ],
     paths: {

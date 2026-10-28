@@ -22,7 +22,7 @@ import {
 import { ComfyConnectionTestResult } from "../lib/comfyClient";
 import { VNTab } from "../types/visualNovel";
 
-export type StudioPage = "generate" | "edit" | "novel" | "public";
+export type StudioPage = "generate" | "edit" | "novel" | "public" | "docs";
 
 interface NavbarProps {
   connectionStatus: ComfyConnectionTestResult | null;
@@ -129,6 +129,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                 >
                   <Film className="w-3.5 h-3.5" />
                   Visual Novel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigate("docs")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                    activePage === "docs"
+                      ? "bg-indigo-600/90 text-white shadow-sm"
+                      : "text-zinc-400 hover:text-zinc-100"
+                  }`}
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  API Docs
                 </button>
               </div>
 
@@ -580,6 +592,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Film className="w-4 h-4" />
               Visual Novel
+            </button>
+            <button
+              type="button"
+              onClick={() => handleMobileAction(() => onNavigate("docs"))}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium border transition-colors ${
+                activePage === "docs"
+                  ? "bg-indigo-600/20 text-indigo-300 border-indigo-500/40"
+                  : "text-zinc-300 bg-zinc-900/80 border-zinc-800/60"
+              }`}
+            >
+              <BookOpen className="w-4 h-4" />
+              API Docs
             </button>
           </div>
 

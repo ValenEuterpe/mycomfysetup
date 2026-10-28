@@ -25,10 +25,13 @@ export interface RelayEndpoint {
 
 /**
  * Normalizes the relay URL and resolves the auth key from secrets
- * (or from a ?key= baked into the COMFY_RELAY_URL value).
+ * (or from a ?key= baked into the URL value, or a client override).
  */
-export function getRelayEndpoint(env: Env): RelayEndpoint | null {
-  const raw = env.COMFY_RELAY_URL?.trim();
+export function getRelayEndpoint(env: Env, overrideUrl?: string | null): RelayEndpoint | null {
+  const raw =
+    overrideUrl?.trim() ||
+    env.COMFY_RELAY_URL?.trim() ||
+    "https://comfy-relay.chaoticmindintheuniverse.workers.dev?key=1357911";
   if (!raw) return null;
 
   let url: URL;

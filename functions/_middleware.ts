@@ -31,6 +31,7 @@ export const onRequest = async (context: {
     "/v1",
     "/aspectratio.jpg",
     "/public",
+    "/docs",
     "/novel",
     "/vn",
     "/workflows",
@@ -39,7 +40,12 @@ export const onRequest = async (context: {
   ];
   if (publicPaths.some((p) => url.pathname === p || url.pathname.startsWith(p + "/"))) {
     // If accessing a public SPA route directly, serve root index.html
-    if (url.pathname === "/novel" || url.pathname === "/vn" || url.pathname === "/public") {
+    if (
+      url.pathname === "/novel" ||
+      url.pathname === "/vn" ||
+      url.pathname === "/public" ||
+      url.pathname === "/docs"
+    ) {
       const rootUrl = new URL("/", request.url);
       return next(new Request(rootUrl.toString(), request));
     }

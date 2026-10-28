@@ -80,7 +80,7 @@ export const CodeExportModal: React.FC<CodeExportModalProps> = ({
       fileExtension = "json";
       break;
     case "openai":
-      codeContent = generateOpenAiV1Code(window.location.origin);
+      codeContent = generateOpenAiV1Code(window.location.origin, endpoint);
       fileExtension = "sh";
       break;
     case "json":
