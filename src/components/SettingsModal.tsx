@@ -13,6 +13,12 @@ import {
   Key,
   Server,
   Layers,
+  Globe,
+  Save,
+  Check,
+  Sparkles,
+  Wand2,
+  Scissors,
 } from "lucide-react";
 import { ComfyConnectionTestResult } from "../lib/comfyClient";
 import {
@@ -21,6 +27,12 @@ import {
   fetchAvailableModels,
 } from "../lib/llmClient";
 import { LlmConfig } from "../types/visualNovel";
+import {
+  PublicSiteSettings,
+  loadCachedPublicSettings,
+  fetchPublicSettings,
+  savePublicSettingsOnServer,
+} from "../lib/publicSettings";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -31,9 +43,10 @@ interface SettingsModalProps {
   isTesting: boolean;
   connectionResult: ComfyConnectionTestResult | null;
   endpointHistory: string[];
+  onPublicSettingsChange?: (settings: PublicSiteSettings) => void;
 }
 
-type SettingsTab = "comfy" | "llm";
+type SettingsTab = "comfy" | "llm" | "public";
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
@@ -44,6 +57,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   isTesting,
   connectionResult,
   endpointHistory,
+  onPublicSettingsChange,
 }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>("comfy");
   const [showHistory, setShowHistory] = useState(false);
@@ -56,16 +70,78 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     message?: string;
   } | null>(null);
 
+  // Public Settings State
+  const [publicSettings, setPublicSettings] = useState<PublicSiteSettings>(loadCachedPublicSettings);
+  const [isSavingPublic, setIsSavingPublic] = useState(false);
+  const [publicSaveStatus, setPublicSaveStatus] = useState<{
+    ok?: boolean;
+    message?: string;
+  } | null>(null);
+
   useEffect(() => {
     if (isOpen) {
       setLlmConfig(loadLlmConfig());
       setModelsStatus(null);
+      fetchPublicSettings().then((s) => {
+        setPublicSettings(s);
+        setPublicSaveStatus(null);
+      });
     }
   }, [isOpen]);
 
   const handleLlmChange = (changes: Partial<LlmConfig>) => {
     const updated = saveLlmConfig(changes);
     setLlmConfig(updated);
+  };
+
+  const handleTogglePublicModel = (modelId: string) => {
+    setPublicSettings((prev) => {
+      const isCurrentlyEnabled = prev.enabledModels[modelId] !== false;
+      const nextEnabled = {
+        ...prev.enabledModels,
+        [modelId]: !isCurrentlyEnabled,
+      };
+
+      // Guard: At least one model must remain enabled
+      const remainingCount = Object.values(nextEnabled).filter(Boolean).length;
+      if (remainingCount === 0) {
+        alert("At least one model must remain enabled for the public page.");
+        return prev;
+      }
+
+      // If disabling the current default model, move default to another enabled model
+      let defaultModelId = prev.defaultModelId;
+      if (!nextEnabled[defaultModelId]) {
+        const fallback = Object.keys(nextEnabled).find((k) => nextEnabled[k]);
+        if (fallback) defaultModelId = fallback;
+      }
+
+      return {
+        ...prev,
+        enabledModels: nextEnabled,
+        defaultModelId,
+      };
+    });
+    setPublicSaveStatus(null);
+  };
+
+  const handleSetDefaultModel = (modelId: string) => {
+    setPublicSettings((prev) => ({
+      ...prev,
+      defaultModelId: modelId,
+    }));
+    setPublicSaveStatus(null);
+  };
+
+  const handleSavePublicSettings = async () => {
+    setIsSavingPublic(true);
+    setPublicSaveStatus(null);
+    const result = await savePublicSettingsOnServer(publicSettings);
+    setIsSavingPublic(false);
+    setPublicSaveStatus(result);
+    if (result.ok) {
+      onPublicSettingsChange?.(publicSettings);
+    }
   };
 
   const handleFetchModels = async () => {
@@ -160,6 +236,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <Bot className="w-3.5 h-3.5" />
             Visual Novel LLM
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("public")}
+            className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold border-b-2 transition-colors ${
+              activeTab === "public"
+                ? "border-emerald-500 text-emerald-400"
+                : "border-transparent text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            <Globe className="w-3.5 h-3.5" />
+            Public Models
+          </button>
         </div>
 
         {/* Content */}
@@ -253,7 +341,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <span>{isTesting ? "Testing Connection..." : "Test Connection"}</span>
               </button>
             </>
-          ) : (
+          ) : activeTab === "llm" ? (
             <>
               {/* LLM Base URL */}
               <div>
@@ -366,6 +454,163 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </p>
               </div>
             </>
+          ) : (
+            <div className="flex flex-col gap-5">
+              <div>
+                <h4 className="text-xs font-bold text-zinc-200 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                  <Globe className="w-4 h-4 text-emerald-400" />
+                  Public Model Visibility & Defaults
+                </h4>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  Control which models are visible and usable on the public generator (http://nsfwimage.pages.dev).
+                  Switching off a model removes it entirely from the public workflow menu.
+                </p>
+              </div>
+
+              {/* Models List */}
+              <div className="flex flex-col gap-2.5">
+                {[
+                  {
+                    id: "anima-base",
+                    name: "Anima Base",
+                    subtitle: "Anime & Stylized T2I with Silvana LoRA",
+                    icon: Sparkles,
+                    color: "text-indigo-400",
+                    badgeColor: "bg-indigo-500/10 text-indigo-300 border-indigo-500/20",
+                  },
+                  {
+                    id: "kroma",
+                    name: "Krea-2 (Kroma Upscale)",
+                    subtitle: "Photorealistic distilled Krea-2 + 2x Lanczos refinement (WebP format)",
+                    icon: Wand2,
+                    color: "text-purple-400",
+                    badgeColor: "bg-purple-500/10 text-purple-300 border-purple-500/20",
+                  },
+                  {
+                    id: "anima-sticker",
+                    name: "Anima Sticker",
+                    subtitle: "RMBG-2.0 transparent cutout with outline highlight",
+                    icon: Scissors,
+                    color: "text-fuchsia-400",
+                    badgeColor: "bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20",
+                  },
+                ].map((item) => {
+                  const isEnabled = publicSettings.enabledModels[item.id] !== false;
+                  const isDefault = publicSettings.defaultModelId === item.id;
+                  const Icon = item.icon;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`p-3.5 rounded-xl border transition-all flex items-center justify-between gap-3 ${
+                        isEnabled
+                          ? "bg-zinc-900/90 border-zinc-700/80 shadow-sm"
+                          : "bg-zinc-950/40 border-zinc-800/60 opacity-60"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`p-2 rounded-lg border ${item.badgeColor} shrink-0`}>
+                          <Icon className={`w-4 h-4 ${item.color}`} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-zinc-100 truncate">
+                              {item.name}
+                            </span>
+                            {isDefault && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                Default
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-zinc-400 truncate">{item.subtitle}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {/* Toggle switch */}
+                        <button
+                          type="button"
+                          onClick={() => handleTogglePublicModel(item.id)}
+                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            isEnabled ? "bg-emerald-600" : "bg-zinc-800"
+                          }`}
+                          title={isEnabled ? "Click to disable for public" : "Click to enable for public"}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                              isEnabled ? "translate-x-5" : "translate-x-0"
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Default Model Selection */}
+              <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-3.5">
+                <label className="text-xs font-semibold text-zinc-300 block mb-1.5 uppercase tracking-wider">
+                  Default Public Model
+                </label>
+                <select
+                  value={publicSettings.defaultModelId}
+                  onChange={(e) => handleSetDefaultModel(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 focus:border-emerald-500 rounded-lg px-3 py-2 text-xs text-zinc-100"
+                >
+                  {[
+                    { id: "anima-base", name: "Anima Base" },
+                    { id: "kroma", name: "Krea-2 (Kroma Upscale)" },
+                    { id: "anima-sticker", name: "Anima Sticker" },
+                  ]
+                    .filter((m) => publicSettings.enabledModels[m.id] !== false)
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                </select>
+                <p className="text-[11px] text-zinc-500 mt-1.5">
+                  This workflow will automatically be selected when a visitor first visits http://nsfwimage.pages.dev.
+                </p>
+              </div>
+
+              {/* Save Button & Status */}
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <div>
+                  {publicSaveStatus && (
+                    <span
+                      className={`text-xs flex items-center gap-1.5 font-medium ${
+                        publicSaveStatus.ok ? "text-emerald-400" : "text-rose-400"
+                      }`}
+                    >
+                      {publicSaveStatus.ok ? (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Saved and published!</span>
+                        </>
+                      ) : (
+                        <>
+                          <XCircle className="w-3.5 h-3.5" />
+                          <span>{publicSaveStatus.message || "Failed to save"}</span>
+                        </>
+                      )}
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSavePublicSettings}
+                  disabled={isSavingPublic}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-xs font-semibold text-white shadow-sm transition-all active:scale-95"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{isSavingPublic ? "Saving..." : "Save Public Settings"}</span>
+                </button>
+              </div>
+            </div>
           )}
 
           {/* Security & Local Storage Badge */}

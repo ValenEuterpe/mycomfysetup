@@ -66,10 +66,10 @@ export const onRequest = async (context: {
   if (request.method === "GET") {
     const nextPath = url.searchParams.get("next") || "";
 
-    // Already signed in? bounce to the target page.
+    // Already signed in? bounce to the target page (default to /admin).
     const authed = await verifySessionToken(env, readSessionCookie(request));
     if (authed) {
-      return Response.redirect(url.origin + (nextPath.startsWith("/") ? nextPath : "/"), 302);
+      return Response.redirect(url.origin + (nextPath.startsWith("/") ? nextPath : "/admin"), 302);
     }
 
     return new Response(
@@ -110,7 +110,7 @@ export const onRequest = async (context: {
         status: 302,
         headers: {
           "Set-Cookie": buildSessionCookie(token),
-          Location: nextPath.startsWith("/") ? nextPath : "/",
+          Location: nextPath.startsWith("/") ? nextPath : "/admin",
         },
       });
     }

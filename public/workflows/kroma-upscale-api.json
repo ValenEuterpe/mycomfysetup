@@ -6,7 +6,9 @@
     },
     "class_type": "UNETLoader",
     "_meta": {
-      "title": "Load Diffusion Model"
+      "title": "Load Diffusion Model",
+      "cnr_id": "comfy-core",
+      "ver": "0.44.0"
     }
   },
   "2": {
@@ -17,7 +19,9 @@
     },
     "class_type": "CLIPLoader",
     "_meta": {
-      "title": "Load CLIP"
+      "title": "Load CLIP",
+      "cnr_id": "comfy-core",
+      "ver": "0.44.0"
     }
   },
   "3": {
@@ -26,12 +30,14 @@
     },
     "class_type": "VAELoader",
     "_meta": {
-      "title": "Load VAE"
+      "title": "Load VAE",
+      "cnr_id": "comfy-core",
+      "ver": "0.44.0"
     }
   },
   "6": {
     "inputs": {
-      "text": "a man sitting in a cabriolet car ",
+      "text": "a twenty-eight-year-old white woman of Irish descent with fair skin, green almond-shaped eyes, a straight narrow nose, full lips, a soft rounded jaw, and arched auburn eyebrows, long curly auburn hair, freckles across her nose and cheeks, and an athletic build\nwearing a tailored emerald-green blazer over a cream silk shirt, black slim trousers, and polished black ankle boots, with a thin silver watch on her left wrist",
       "clip": [
         "2",
         0
@@ -39,7 +45,9 @@
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
-      "title": "CLIP Text Encode (Prompt)"
+      "title": "CLIP Text Encode (Prompt)",
+      "cnr_id": "comfy-core",
+      "ver": "0.44.0"
     }
   },
   "7": {
@@ -51,7 +59,9 @@
     },
     "class_type": "ConditioningZeroOut",
     "_meta": {
-      "title": "Conditioning Zero Out"
+      "title": "Conditioning Zero Out",
+      "cnr_id": "comfy-core",
+      "ver": "0.44.0"
     }
   },
   "9": {
@@ -84,7 +94,9 @@
     },
     "class_type": "KSampler",
     "_meta": {
-      "title": "KSampler"
+      "title": "KSampler",
+      "cnr_id": "comfy-core",
+      "ver": "0.44.0"
     }
   },
   "10": {
@@ -100,23 +112,9 @@
     },
     "class_type": "VAEDecode",
     "_meta": {
-      "title": "VAE Decode"
-    }
-  },
-  "19": {
-    "inputs": {
-      "filename_prefix": "kroma/kroma",
-      "format": "png",
-      "format.bit_depth": "16-bit",
-      "format.input_color_space": "sRGB",
-      "images": [
-        "28",
-        0
-      ]
-    },
-    "class_type": "SaveImageAdvanced",
-    "_meta": {
-      "title": "Save Image (Advanced)"
+      "title": "VAE Decode",
+      "cnr_id": "comfy-core",
+      "ver": "0.44.0"
     }
   },
   "21": {
@@ -127,7 +125,9 @@
     },
     "class_type": "ResolutionSelector",
     "_meta": {
-      "title": "Resolution Selector"
+      "title": "Resolution Selector",
+      "cnr_id": "comfy-core",
+      "ver": "0.44.0"
     }
   },
   "22": {
@@ -141,7 +141,9 @@
     },
     "class_type": "LoraLoaderModelOnly",
     "_meta": {
-      "title": "Load LoRA"
+      "title": "Load LoRA",
+      "cnr_id": "comfy-core",
+      "ver": "0.44.0"
     }
   },
   "23": {
@@ -158,7 +160,9 @@
     },
     "class_type": "EmptyLatentImage",
     "_meta": {
-      "title": "Empty Latent Image"
+      "title": "Empty Latent Image",
+      "cnr_id": "comfy-core",
+      "ver": "0.44.0"
     }
   },
   "26": {
@@ -191,7 +195,9 @@
     },
     "class_type": "KSampler",
     "_meta": {
-      "title": "KSampler"
+      "title": "KSampler",
+      "cnr_id": "comfy-core",
+      "ver": "0.44.0"
     }
   },
   "27": {
@@ -207,7 +213,9 @@
     },
     "class_type": "VAEEncode",
     "_meta": {
-      "title": "VAE Encode"
+      "title": "VAE Encode",
+      "cnr_id": "comfy-core",
+      "ver": "0.44.0"
     }
   },
   "28": {
@@ -223,7 +231,9 @@
     },
     "class_type": "VAEDecode",
     "_meta": {
-      "title": "VAE Decode"
+      "title": "VAE Decode",
+      "cnr_id": "comfy-core",
+      "ver": "0.44.0"
     }
   },
   "29": {
@@ -237,28 +247,39 @@
     },
     "class_type": "ImageScaleBy",
     "_meta": {
-      "title": "Upscale Image By"
+      "title": "Upscale Image By",
+      "cnr_id": "comfy-core",
+      "ver": "0.44.0"
     }
   },
   "30": {
     "inputs": {
-      "seed": 13375419
+      "seed": 13375418
     },
     "class_type": "SeedNode",
     "_meta": {
-      "title": "Seed"
+      "title": "Seed",
+      "cnr_id": "comfy-core",
+      "ver": "0.44.0"
     }
   },
-  "31": {
+  "33": {
     "inputs": {
+      "filename_prefix": "ComfyUI",
+      "fps": 6,
+      "lossless": false,
+      "quality": 90,
+      "method": "default",
       "images": [
-        "19",
+        "28",
         0
       ]
     },
-    "class_type": "PreviewImage",
+    "class_type": "SaveAnimatedWEBP",
     "_meta": {
-      "title": "Preview Image"
+      "title": "Save Animated WEBP",
+      "cnr_id": "comfy-core",
+      "ver": "0.44.0"
     }
   }
 }

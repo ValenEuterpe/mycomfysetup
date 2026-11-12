@@ -18,6 +18,9 @@ import {
   Shirt,
   Smile,
   Compass,
+  ShieldCheck,
+  Globe,
+  LogOut,
 } from "lucide-react";
 import { ComfyConnectionTestResult } from "../lib/comfyClient";
 import { VNTab } from "../types/visualNovel";
@@ -351,7 +354,37 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <Settings className="w-3.5 h-3.5" />
                 <span>Settings</span>
               </button>
+
+              {/* View Public Portal */}
+              <a
+                href="/"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition-colors"
+                title="View Public Generator Portal"
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>Public Site</span>
+              </a>
+
+              {/* Sign out */}
+              <a
+                href="/api/auth?logout=1"
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-zinc-900 border border-transparent hover:border-zinc-800 transition-colors"
+                title="Sign out of Admin Studio"
+              >
+                <LogOut className="w-4 h-4" />
+              </a>
             </>
+          )}
+
+          {isPublicMode && (
+            <a
+              href="/admin"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-300 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition-colors ml-1"
+              title="Admin Studio (Password required)"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Admin</span>
+            </a>
           )}
         </div>
 
@@ -390,6 +423,15 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <RotateCcw className="w-4 h-4" />
               </button>
+
+              {/* Admin login button for mobile public users */}
+              <a
+                href="/admin"
+                className="p-1.5 rounded-lg text-zinc-300 hover:text-white bg-zinc-900 border border-zinc-800"
+                title="Admin Studio"
+              >
+                <ShieldCheck className="w-4 h-4 text-indigo-400" />
+              </a>
             </>
           ) : (
             <>
@@ -657,6 +699,24 @@ export const Navbar: React.FC<NavbarProps> = ({
             <RotateCcw className="w-4 h-4 text-zinc-400" />
             <span>Reset Inputs to Default</span>
           </button>
+
+          {/* Public site link in mobile */}
+          <a
+            href="/"
+            className="flex items-center gap-2 w-full px-3 py-2.5 rounded-lg text-xs font-medium text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 transition-colors text-left"
+          >
+            <Globe className="w-4 h-4" />
+            <span>View Public Portal</span>
+          </a>
+
+          {/* Logout in mobile */}
+          <a
+            href="/api/auth?logout=1"
+            className="flex items-center gap-2 w-full px-3 py-2.5 rounded-lg text-xs font-medium text-rose-400 hover:text-rose-300 bg-zinc-900/80 border border-zinc-800/60 transition-colors text-left"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Sign out</span>
+          </a>
         </div>
       )}
     </header>

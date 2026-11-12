@@ -310,7 +310,7 @@ const WORKFLOWS: BotWorkflow[] = [
       samplerNodes: [{ node: "9", key: "sampler_name" }],
       schedulerNodes: [{ node: "9", key: "scheduler" }],
     },
-    outputNodes: ["19"],
+    outputNodes: ["33"],
   },
   {
     id: "anima-sticker",

@@ -32,6 +32,11 @@ import {
   WorkflowPreset,
   DEFAULT_ENDPOINT,
 } from "./lib/storage";
+import {
+  PublicSiteSettings,
+  loadCachedPublicSettings,
+  fetchPublicSettings,
+} from "./lib/publicSettings";
 
 // Components
 import { Navbar, StudioPage } from "./components/Navbar";
@@ -47,18 +52,37 @@ import { VisualNovelPage } from "./pages/VisualNovelPage";
 import { ApiDocsPage } from "./pages/ApiDocsPage";
 import { VNTab } from "./types/visualNovel";
 
-/** Reads the current hash or path route; unknown -> generate. */
+/** Reads the current hash or path route; root '/' and '/public' -> public. */
 function readCurrentPage(): StudioPage {
   const path = location.pathname.toLowerCase();
-  if (path.startsWith("/public")) return "public";
+  const hash = location.hash.replace(/^#\/?/, "").toLowerCase();
+
+  // Root or /public: public-facing generation portal
+  if (path === "/" || path === "" || path.startsWith("/public")) {
+    if (hash === "novel" || hash === "vn") return "novel";
+    if (hash === "docs") return "docs";
+    return "public";
+  }
+
+  // /admin: password-protected admin studio
+  if (path.startsWith("/admin")) {
+    if (hash === "edit") return "edit";
+    if (hash === "novel" || hash === "vn") return "novel";
+    if (hash === "docs") return "docs";
+    return "generate";
+  }
+
+  // Explicit paths
   if (path.startsWith("/novel") || path.startsWith("/vn")) return "novel";
   if (path.startsWith("/docs")) return "docs";
-  const hash = location.hash.replace(/^#\/?/, "").toLowerCase();
+  if (path.startsWith("/edit")) return "edit";
+
   if (hash === "public") return "public";
   if (hash === "edit") return "edit";
   if (hash === "novel" || hash === "vn") return "novel";
   if (hash === "docs") return "docs";
-  return "generate";
+
+  return "public";
 }
 
 export const App: React.FC = () => {
@@ -77,6 +101,13 @@ export const App: React.FC = () => {
   // Presets
   const [presets, setPresets] = useState<WorkflowPreset[]>([]);
   const [activePresetId, setActivePresetId] = useState<string>("anima-base");
+
+  // Public Model Visibility Settings
+  const [publicSettings, setPublicSettings] = useState<PublicSiteSettings>(loadCachedPublicSettings);
+
+  useEffect(() => {
+    fetchPublicSettings().then((s) => setPublicSettings(s));
+  }, []);
 
   // 3. Execution & Media Generation State
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
@@ -109,6 +140,11 @@ export const App: React.FC = () => {
   const [page, setPage] = useState<StudioPage>(readCurrentPage);
   const isPublic = page === "public";
 
+  // Presets visible in current mode (filtered for public view)
+  const visiblePresets = isPublic
+    ? presets.filter((p) => publicSettings.enabledModels[p.id] !== false)
+    : presets;
+
   const navigate = useCallback((next: StudioPage) => {
     location.hash =
       next === "public"
@@ -129,6 +165,21 @@ export const App: React.FC = () => {
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
+
+  // When in public mode, if active preset is disabled by admin, auto-switch to default enabled preset
+  useEffect(() => {
+    if (isPublic && visiblePresets.length > 0) {
+      const isCurrentEnabled = visiblePresets.some((p) => p.id === activePresetId);
+      if (!isCurrentEnabled) {
+        const preferred =
+          visiblePresets.find((p) => p.id === publicSettings.defaultModelId) ||
+          visiblePresets[0];
+        if (preferred && preferred.id !== activePresetId) {
+          handleSelectPreset(preferred.id);
+        }
+      }
+    }
+  }, [isPublic, visiblePresets, activePresetId, publicSettings.defaultModelId]);
 
   // Load initial preset workflow
   useEffect(() => {
@@ -172,9 +223,15 @@ export const App: React.FC = () => {
           });
         }
 
-        // Set initial active workflow graph
+        // Set initial active workflow graph: in public mode, honor defaultModelId if enabled
+        const defaultPublicTarget =
+          publicSettings.enabledModels[publicSettings.defaultModelId] !== false
+            ? publicSettings.defaultModelId
+            : builtInPresets.find((p) => publicSettings.enabledModels[p.id] !== false)?.id;
+
+        const targetId = isPublic && defaultPublicTarget ? defaultPublicTarget : activePresetId;
         const initialPreset =
-          builtInPresets.find((p) => p.id === activePresetId) || builtInPresets[0];
+          builtInPresets.find((p) => p.id === targetId) || builtInPresets[0];
 
         if (initialPreset) {
           const json: ComfyWorkflowGraph = JSON.parse(initialPreset.workflowJson);
@@ -566,7 +623,7 @@ export const App: React.FC = () => {
         {/* Workflow Switcher & File Dropzone */}
         <WorkflowBar
           currentWorkflowName={currentWorkflowName}
-          presets={presets}
+          presets={visiblePresets}
           activePresetId={activePresetId}
           onSelectPreset={handleSelectPreset}
           onUploadWorkflowFile={handleUploadWorkflowFile}
@@ -632,6 +689,7 @@ export const App: React.FC = () => {
               randomizeSeedOnGenerate={randomizeSeedOnGenerate}
               onToggleRandomizeSeed={setRandomizeSeedOnGenerate}
               endpoint={endpoint}
+              isPublic={isPublic}
             />
           </div>
 
@@ -669,6 +727,7 @@ export const App: React.FC = () => {
             isTesting={isTestingConnection}
             connectionResult={connectionStatus}
             endpointHistory={endpointHistory}
+            onPublicSettingsChange={setPublicSettings}
           />
 
           <CodeExportModal

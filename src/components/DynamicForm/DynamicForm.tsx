@@ -15,6 +15,7 @@ interface DynamicFormProps {
   randomizeSeedOnGenerate: boolean;
   onToggleRandomizeSeed: (val: boolean) => void;
   endpoint: string;
+  isPublic?: boolean;
 }
 
 export const DynamicForm: React.FC<DynamicFormProps> = ({
@@ -24,6 +25,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
   randomizeSeedOnGenerate,
   onToggleRandomizeSeed,
   endpoint,
+  isPublic = false,
 }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -76,8 +78,8 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
         />
       ))}
 
-      {/* Sampler Controls */}
-      {samplerParams.length > 0 && (
+      {/* Sampler Controls (hidden in public mode) */}
+      {!isPublic && samplerParams.length > 0 && (
         <SamplerField
           parameters={samplerParams}
           onParameterChange={onParameterChange}
@@ -86,8 +88,8 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
         />
       )}
 
-      {/* Model & Checkpoints (if present) */}
-      {modelParams.length > 0 && (
+      {/* Model & Checkpoints (hidden in public mode) */}
+      {!isPublic && modelParams.length > 0 && (
         <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-4">
           <label className="text-xs font-semibold text-zinc-200 uppercase tracking-wider flex items-center gap-1.5 mb-3">
             <Cpu className="w-3.5 h-3.5 text-indigo-400" />
@@ -128,8 +130,8 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
         </div>
       )}
 
-      {/* Advanced / Other Node Literals (Collapsible) */}
-      {otherParams.length > 0 && (
+      {/* Advanced / Other Node Literals (hidden in public mode) */}
+      {!isPublic && otherParams.length > 0 && (
         <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl overflow-hidden">
           <button
             type="button"
