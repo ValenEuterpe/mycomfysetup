@@ -57,6 +57,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
           parameters={dimensionParams}
           onParameterChange={onParameterChange}
           ratioSupport={getRatioSupportForGraph(workflowGraph)}
+          isPublic={isPublic}
         />
       )}
 

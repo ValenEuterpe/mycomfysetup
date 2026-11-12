@@ -7,12 +7,14 @@ interface DimensionFieldProps {
   parameters: ExtractedParameter[];
   onParameterChange: (paramId: string, value: any) => void;
   ratioSupport: RatioSupport;
+  isPublic?: boolean;
 }
 
 export const DimensionField: React.FC<DimensionFieldProps> = ({
   parameters,
   onParameterChange,
   ratioSupport,
+  isPublic = false,
 }) => {
   const widthParam = parameters.find((p) => p.inputKey === "width");
   const heightParam = parameters.find((p) => p.inputKey === "height");
@@ -151,7 +153,7 @@ export const DimensionField: React.FC<DimensionFieldProps> = ({
           </div>
         )}
 
-        {batchParam && (
+        {!isPublic && batchParam && (
           <div className="w-24">
             <label className="text-[11px] text-zinc-400 block mb-1">Batch</label>
             <input
