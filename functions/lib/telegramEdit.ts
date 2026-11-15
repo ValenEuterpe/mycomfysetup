@@ -8,7 +8,10 @@ import {
   forceReplyMarkup,
   inlineKeyboard,
   sendTelegramMedia,
+  getTelegramFileBlob,
 } from "./telegram";
+
+export { getTelegramFileBlob };
 
 /* ------------------------------------------------------------------ */
 /* Types & constants                                                   */
@@ -259,23 +262,6 @@ export function rolePickerText(session: EditSession): string {
 /* ------------------------------------------------------------------ */
 
 const TELEGRAM_API = "https://api.telegram.org";
-
-/** Downloads a Telegram file by id (≤20MB — bot API cap). */
-export async function getTelegramFileBlob(token: string, fileId: string): Promise<Blob> {
-  const infoRes = await fetch(`${TELEGRAM_API}/bot${token}/getFile`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ file_id: fileId }),
-  });
-  const info = await infoRes.json().catch(() => null);
-  const filePath = info?.result?.file_path;
-  if (!info?.ok || !filePath) {
-    throw new Error(`Telegram getFile failed (${info?.description || infoRes.status}).`);
-  }
-  const blobRes = await fetch(`${TELEGRAM_API}/file/bot${token}/${filePath}`);
-  if (!blobRes.ok) throw new Error(`Telegram file download failed (${blobRes.status}).`);
-  return await blobRes.blob();
-}
 
 /* ------------------------------------------------------------------ */
 /* Relay upload (per-run cache keyed by file_unique_id / pass)          */

@@ -39,7 +39,14 @@ import {
   forceReplyMarkup,
   inlineKeyboard,
   setTelegramCommands,
+  getTelegramFileText,
 } from "../lib/telegram";
+import {
+  extractBatchPayload,
+} from "../lib/promptTemplate";
+import {
+  runBatchQueue,
+} from "../lib/telegramBatch";
 import {
   ratioGlyph,
   ratioLabel,
@@ -1215,6 +1222,27 @@ async function handleMessage(
     return;
   }
 
+  // ── Hidden Batch Prompt JSON Intake ──────────────────────────────────
+  const batchResult = extractBatchPayload(text);
+  if (batchResult.payload) {
+    await runBatchQueue(env, chatId, token, batchResult.payload);
+    return;
+  }
+  if (batchResult.isTruncatedOrMalformed) {
+    await sendTelegramMessage(
+      token,
+      chatId,
+      [
+        `⚠️ <b>Malformed or Truncated JSON detected.</b>`,
+        `If your JSON is very large, Telegram may have cut it off (4,096 character limit).`,
+        ``,
+        `💡 <b>Tip:</b> Save it as a <code>.txt</code> or <code>.json</code> file and send it as a document to bypass Telegram's character cap!`,
+      ].join("\n"),
+      { parseMode: "HTML" }
+    );
+    return;
+  }
+
   // Plain text = instant generation with saved settings
   await generateFromText(env, chatId, token, text.trim());
 }
@@ -1294,6 +1322,52 @@ export const onRequest = async (context: {
       if (hasPhoto || hasImageDoc) {
         await handleEditMedia(env, chatId, token, msg);
         return;
+      }
+
+      // Batch prompts document upload: .txt or .json file
+      const doc = msg.document;
+      const isTextOrJsonDoc =
+        !!doc &&
+        (Boolean(doc.file_name?.match(/\.(json|txt)$/i)) ||
+          doc.mime_type === "application/json" ||
+          doc.mime_type === "text/plain" ||
+          doc.mime_type === "text/json");
+
+      if (isTextOrJsonDoc && doc?.file_id) {
+        try {
+          const fileText = await getTelegramFileText(token, doc.file_id);
+          const batchResult = extractBatchPayload(fileText);
+          if (batchResult.payload) {
+            await runBatchQueue(env, chatId, token, batchResult.payload);
+            return;
+          }
+
+          if (batchResult.isTruncatedOrMalformed) {
+            await sendTelegramMessage(
+              token,
+              chatId,
+              `⚠️ <b>Invalid JSON in <code>${escapeHtml(doc.file_name || "file")}</code></b>\n<code>${escapeHtml(clamp(batchResult.error || "Syntax error", 200))}</code>`,
+              { parseMode: "HTML" }
+            );
+            return;
+          }
+
+          await sendTelegramMessage(
+            token,
+            chatId,
+            `⚠️ <b>File received, but no prompts found.</b>\nPlease ensure your JSON contains a <code>"prompts"</code> array.`,
+            { parseMode: "HTML" }
+          );
+          return;
+        } catch (fileErr: any) {
+          await sendTelegramMessage(
+            token,
+            chatId,
+            `❌ <b>Failed to read file:</b> <code>${escapeHtml(clamp(fileErr?.message || "Unknown error", 200))}</code>`,
+            { parseMode: "HTML" }
+          );
+          return;
+        }
       }
 
       // Any non-image media (videos, audio, stickers…) with no text: gentle hint
