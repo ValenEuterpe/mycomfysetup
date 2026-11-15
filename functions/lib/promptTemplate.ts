@@ -10,6 +10,10 @@ export interface PromptBatchPayload {
   character?: Record<string, string>;
   location?: Record<string, string> | string;
   prompts: (string | { prompt: string })[];
+  /** Optional suffix appended to all prompts (e.g. "35mm film, photorealistic realism") */
+  suffix?: string;
+  /** Optional prefix prepended to all prompts */
+  prefix?: string;
   /** Optional model/ratio override if specified directly in JSON */
   model?: string;
   ratio?: string;
@@ -27,6 +31,8 @@ export interface ParsedBatchResult {
 export interface ResolvedBatch {
   resolvedPrompts: string[];
   total: number;
+  suffix?: string;
+  prefix?: string;
   modelOverride?: string;
   ratioOverride?: string;
   negativeOverride?: string;
@@ -195,6 +201,20 @@ export function extractBatchPayload(rawText: string): ParsedBatchResult {
       locations: parsed.locations,
       location: parsed.location,
       prompts: validPrompts,
+      suffix:
+        typeof parsed.suffix === "string"
+          ? parsed.suffix
+          : typeof parsed.style === "string"
+          ? parsed.style
+          : typeof parsed.prompt_suffix === "string"
+          ? parsed.prompt_suffix
+          : undefined,
+      prefix:
+        typeof parsed.prefix === "string"
+          ? parsed.prefix
+          : typeof parsed.prompt_prefix === "string"
+          ? parsed.prompt_prefix
+          : undefined,
       model: typeof parsed.model === "string" ? parsed.model : undefined,
       ratio: typeof parsed.ratio === "string" ? parsed.ratio : undefined,
       negative:
@@ -208,7 +228,8 @@ export function extractBatchPayload(rawText: string): ParsedBatchResult {
 }
 
 /**
- * Resolves all prompts in the payload, replacing character & location tags.
+ * Resolves all prompts in the payload, replacing character & location tags,
+ * and applying optional prefix and suffix to each prompt.
  */
 export function resolveBatch(payload: PromptBatchPayload): ResolvedBatch {
   const replacements = buildReplacementMap(payload);
@@ -218,15 +239,27 @@ export function resolveBatch(payload: PromptBatchPayload): ResolvedBatch {
     const rawPrompt = typeof item === "string" ? item : item.prompt;
     if (!rawPrompt || !rawPrompt.trim()) continue;
 
-    const resolved = resolvePromptTemplate(rawPrompt.trim(), replacements);
+    let resolved = resolvePromptTemplate(rawPrompt.trim(), replacements);
     if (resolved) {
-      resolvedPrompts.push(resolved);
+      if (payload.prefix?.trim()) {
+        const cleanPrefix = payload.prefix.trim().replace(/,\s*$/, "");
+        resolved = `${cleanPrefix}, ${resolved}`;
+      }
+      if (payload.suffix?.trim()) {
+        const cleanSuffix = payload.suffix.trim().replace(/^,\s*/, "");
+        resolved = /[,;.!?]$/.test(resolved)
+          ? `${resolved} ${cleanSuffix}`
+          : `${resolved}, ${cleanSuffix}`;
+      }
+      resolvedPrompts.push(resolved.replace(/\s+/g, " ").trim());
     }
   }
 
   return {
     resolvedPrompts,
     total: resolvedPrompts.length,
+    suffix: payload.suffix,
+    prefix: payload.prefix,
     modelOverride: payload.model,
     ratioOverride: payload.ratio,
     negativeOverride: payload.negative,

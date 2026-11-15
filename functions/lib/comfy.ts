@@ -205,3 +205,18 @@ export async function fetchMediaBlob(
   }
   return res.blob();
 }
+
+/**
+ * Sends an interrupt signal to ComfyUI to immediately abort current GPU generation.
+ */
+export async function interruptComfy(endpoint: RelayEndpoint): Promise<boolean> {
+  try {
+    const res = await fetch(relayUrl(endpoint, "/interrupt"), {
+      method: "POST",
+      headers: endpoint.headers,
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}

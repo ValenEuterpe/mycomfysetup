@@ -45,7 +45,10 @@ import {
   extractBatchPayload,
 } from "../lib/promptTemplate";
 import {
-  runBatchQueue,
+  startBatchQueue,
+  cancelBatch,
+  processBatchStep,
+  getBatchState,
 } from "../lib/telegramBatch";
 import {
   ratioGlyph,
@@ -81,11 +84,12 @@ const BOT_COMMANDS: { command: string; description: string }[] = [
   { command: "reset", description: "Reset settings to defaults" },
   { command: "edit", description: "Edit a photo: /edit starts the guided flow" },
   { command: "gen", description: "One-shot generation: /gen [model] <prompt>" },
+  { command: "cancel", description: "Cancel current batch generation or edit" },
   { command: "help", description: "Usage help" },
 ];
 
-/** Bump to force a re-install of the slash-command menu (e.g. after adding /reset). */
-const COMMANDS_VERSION = "3";
+/** Bump to force a re-install of the slash-command menu (e.g. after adding /reset or /cancel). */
+const COMMANDS_VERSION = "4";
 
 async function ensureCommandsInstalled(env: Env, token: string): Promise<void> {
   if (!env.TELEGRAM_SETTINGS) return;
@@ -922,6 +926,16 @@ async function handleCallbackQuery(
       break;
     }
 
+    case data === "batch:cancel": {
+      const cancelled = await cancelBatch(env, chatId, token);
+      await answerTelegramCallback(
+        token,
+        cq.id,
+        cancelled ? "Batch generation cancelled." : "No active batch."
+      );
+      break;
+    }
+
     /* ── Identity Edit flow controls ─────────────────────────────────── */
 
     case data === "edit:prompt": {
@@ -1047,6 +1061,39 @@ async function handleMessage(
       { parseMode: "HTML", replyMarkup: inlineKeyboard(HOME_ROWS) }
     );
     await warnNoKV(token, chatId, env);
+    return;
+  }
+
+  // /cancel, /stop — abort active batch generation or edit session
+  if (
+    lower === "/cancel" ||
+    lower.startsWith("/cancel ") ||
+    lower.startsWith("/cancel@") ||
+    lower === "/stop" ||
+    lower.startsWith("/stop ") ||
+    lower.startsWith("/stop@")
+  ) {
+    const cancelledBatch = await cancelBatch(env, chatId, token);
+    if (cancelledBatch) {
+      return;
+    }
+    const editSession = await getEditSession(env, chatId);
+    if (editSession) {
+      await clearEditSession(env, chatId);
+      await sendTelegramMessage(
+        token,
+        chatId,
+        `✏️ <b>Exited Identity Edit.</b>\nSend any text to generate normally again.`,
+        { parseMode: "HTML", replyMarkup: inlineKeyboard(HOME_ROWS) }
+      );
+      return;
+    }
+    await sendTelegramMessage(
+      token,
+      chatId,
+      `🤷 <b>Nothing to cancel.</b> No batch generation or photo edit session is active.`,
+      { parseMode: "HTML" }
+    );
     return;
   }
 
@@ -1225,7 +1272,7 @@ async function handleMessage(
   // ── Hidden Batch Prompt JSON Intake ──────────────────────────────────
   const batchResult = extractBatchPayload(text);
   if (batchResult.payload) {
-    await runBatchQueue(env, chatId, token, batchResult.payload);
+    await startBatchQueue(env, chatId, token, origin, batchResult.payload);
     return;
   }
   if (batchResult.isTruncatedOrMalformed) {
@@ -1262,6 +1309,54 @@ export const onRequest = async (context: {
     }
   }
 
+  const url = new URL(request.url);
+  const origin = url.origin;
+
+  // ── Internal batch step trigger (self-chaining worker) ─────────────
+  if (url.searchParams.get("batch_step") === "1") {
+    const chatIdStr = url.searchParams.get("chat_id");
+    const batchId = url.searchParams.get("batch_id");
+    const secret = url.searchParams.get("secret");
+
+    if (chatIdStr && batchId && secret && env.TELEGRAM_BOT_TOKEN) {
+      const chatId = parseInt(chatIdStr, 10);
+      const state = await getBatchState(env, chatId);
+      if (
+        state &&
+        state.batchId === batchId &&
+        state.secret === secret &&
+        state.status === "running"
+      ) {
+        const stepPromise = processBatchStep(
+          env,
+          origin,
+          chatId,
+          batchId,
+          env.TELEGRAM_BOT_TOKEN
+        );
+        if (typeof context.waitUntil === "function") {
+          context.waitUntil(stepPromise);
+        } else {
+          await stepPromise;
+        }
+        return new Response(
+          JSON.stringify({ ok: true, batchId, index: state.currentIndex }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+    }
+    return new Response(
+      JSON.stringify({ ok: false, error: "Invalid batch step or expired" }),
+      {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }
+
   if (request.method !== "POST") {
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,
@@ -1283,8 +1378,6 @@ export const onRequest = async (context: {
   }
 
   await ensureCommandsInstalled(env, env.TELEGRAM_BOT_TOKEN);
-
-  const origin = new URL(request.url).origin;
 
   /**
    * Acknowledge Telegram immediately (200) and keep processing in the
@@ -1338,7 +1431,7 @@ export const onRequest = async (context: {
           const fileText = await getTelegramFileText(token, doc.file_id);
           const batchResult = extractBatchPayload(fileText);
           if (batchResult.payload) {
-            await runBatchQueue(env, chatId, token, batchResult.payload);
+            await startBatchQueue(env, chatId, token, origin, batchResult.payload);
             return;
           }
 

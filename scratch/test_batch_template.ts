@@ -110,4 +110,32 @@ assert(
   "Truncated JSON should be flagged as isTruncatedOrMalformed"
 );
 
+// 6. Suffix & Prefix test
+const suffixPayload = {
+  suffix: "35mm film, photorealistic realism",
+  prefix: "masterpiece cinematic",
+  characters: {
+    Lisa: "a woman of 35 with freckles",
+  },
+  prompts: [
+    "Lisa drinking coffee",
+    "Lisa smiling warmly at the camera.",
+  ],
+};
+const suffixResult = resolveBatch(suffixPayload);
+console.log("Suffix result 1: ", suffixResult.resolvedPrompts[0]);
+console.log("Suffix result 2: ", suffixResult.resolvedPrompts[1]);
+
+assert(
+  suffixResult.resolvedPrompts[0] ===
+    "masterpiece cinematic, a woman of 35 with freckles drinking coffee, 35mm film, photorealistic realism",
+  "Should prepend prefix and append suffix with clean comma separation"
+);
+
+assert(
+  suffixResult.resolvedPrompts[1] ===
+    "masterpiece cinematic, a woman of 35 with freckles smiling warmly at the camera. 35mm film, photorealistic realism",
+  "Should append suffix cleanly after period without extra comma"
+);
+
 console.log("\n🎉 ALL TESTS PASSED SUCCESSFULLY!");
