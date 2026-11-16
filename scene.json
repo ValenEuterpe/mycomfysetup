@@ -1,0 +1,24 @@
+{
+  "suffix": "35mm film photography, photorealistic realism, natural color grading, fine grain, 8k",
+  "characters": {
+    "Elena": "a 32-year-old woman with messy auburn hair tied in a loose bun, sharp green eyes, wearing an oversized emerald sweater and dark denim jeans",
+    "Marcus": "a 38-year-old tall athletic man with short stubble beard, dark brown undercut hair, wearing a charcoal wool trench coat",
+    "Sofia": "a 24-year-old woman with a platinum blonde bob haircut, expressive brown eyes, wearing a cropped vintage leather jacket and silver hoop earrings"
+  },
+  "locations": {
+    "coffee shop": "a cozy rustic coffee shop with warm fairy lights, exposed brick walls, vintage wooden tables, and rain streaking across large steamy windows",
+    "rooftop": "a breezy urban rooftop lounge at twilight with glowing lanterns, neon city skyline in the background, and comfortable outdoor velvet couches"
+  },
+  "prompts": [
+    "Elena and Marcus drinking espresso at the wooden table in the coffee shop, candid relaxed moment, cinematic lighting",
+    "Sofia leaning against the brick wall in the coffee shop, checking her vintage camera with a smile, warm ambient lighting",
+    "Marcus laughing with Sofia on the rooftop under the twilight sky, city skyline glowing in the background, shallow depth of field",
+    "Elena standing alone at the edge of the rooftop, evening breeze blowing through her hair, neon skyline reflections",
+    "Sofia serving a warm cup of coffee to Elena in the coffee shop, golden morning sunlight filtering through the steamy windows",
+    "Marcus sketching in a leather notebook at the coffee shop while Elena looks over his shoulder with curiosity",
+    "Elena, Marcus, and Sofia gathered around the velvet couches on the rooftop, celebrating with glasses of champagne, laughing together",
+    "Sofia sitting casually on the edge of a table in the coffee shop, playful expression talking to Marcus",
+    "Elena gazing up at the starry twilight sky from the rooftop, warm lantern glow illuminating her face, peaceful atmosphere",
+    "Marcus adjusting Sofia's leather jacket collar on the rooftop, dramatic city night lights in the background, cinematic bokeh"
+  ]
+}

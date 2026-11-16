@@ -47,6 +47,7 @@ import {
 import {
   startBatchQueue,
   cancelBatch,
+  resumeBatch,
   processBatchStep,
   getBatchState,
 } from "../lib/telegramBatch";
@@ -85,11 +86,12 @@ const BOT_COMMANDS: { command: string; description: string }[] = [
   { command: "edit", description: "Edit a photo: /edit starts the guided flow" },
   { command: "gen", description: "One-shot generation: /gen [model] <prompt>" },
   { command: "cancel", description: "Cancel current batch generation or edit" },
+  { command: "resume", description: "Resume a paused batch queue" },
   { command: "help", description: "Usage help" },
 ];
 
-/** Bump to force a re-install of the slash-command menu (e.g. after adding /reset or /cancel). */
-const COMMANDS_VERSION = "4";
+/** Bump to force a re-install of the slash-command menu (e.g. after adding /resume). */
+const COMMANDS_VERSION = "5";
 
 async function ensureCommandsInstalled(env: Env, token: string): Promise<void> {
   if (!env.TELEGRAM_SETTINGS) return;
@@ -936,6 +938,12 @@ async function handleCallbackQuery(
       break;
     }
 
+    case data === "batch:resume": {
+      await answerTelegramCallback(token, cq.id, "Resuming batch queue...");
+      await resumeBatch(env, chatId, token, origin);
+      break;
+    }
+
     /* ── Identity Edit flow controls ─────────────────────────────────── */
 
     case data === "edit:prompt": {
@@ -1094,6 +1102,12 @@ async function handleMessage(
       `🤷 <b>Nothing to cancel.</b> No batch generation or photo edit session is active.`,
       { parseMode: "HTML" }
     );
+    return;
+  }
+
+  // /resume — resume paused batch queue
+  if (lower === "/resume" || lower.startsWith("/resume ") || lower.startsWith("/resume@")) {
+    await resumeBatch(env, chatId, token, origin);
     return;
   }
 
