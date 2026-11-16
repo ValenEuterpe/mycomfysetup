@@ -182,7 +182,7 @@ export async function triggerNextBatchStep(
       ].join("\n");
 
       const resumeMarkup = inlineKeyboard([
-        [["▶️ Resume Queue", "batch:resume"]],
+        [["▶️ Continue Queue", "batch:resume"]],
         [["🛑 Cancel Queue", "batch:cancel"]],
       ]);
 
@@ -193,6 +193,26 @@ export async function triggerNextBatchStep(
     }
   } catch (err: any) {
     console.error("[telegramBatch] triggerNextBatchStep error:", err);
+    state.status = "paused";
+    state.updatedAt = Date.now();
+    await saveBatchState(env, chatId, state);
+
+    const pausedNotice = [
+      `⚠️ <b>Batch paused at [${state.currentIndex}/${state.total}]</b>`,
+      `<i>Network error: ${escapeHtml(clamp(err?.message || "Connection failed", 150))}</i>`,
+      ``,
+      `Tap below to resume right where you left off:`,
+    ].join("\n");
+
+    const resumeMarkup = inlineKeyboard([
+      [["▶️ Continue Queue", "batch:resume"]],
+      [["🛑 Cancel Queue", "batch:cancel"]],
+    ]);
+
+    await sendTelegramMessage(token, chatId, pausedNotice, {
+      parseMode: "HTML",
+      replyMarkup: resumeMarkup,
+    }).catch(() => {});
   }
 }
 
@@ -212,6 +232,20 @@ export async function resumeBatch(
       parseMode: "HTML",
     });
     return false;
+  }
+
+  // Prevent duplicate runs if user double taps while already actively generating
+  if (state.status === "running") {
+    const isRecentlyActive = Date.now() - state.updatedAt < 45_000;
+    if (isRecentlyActive) {
+      await sendTelegramMessage(
+        token,
+        chatId,
+        "ℹ️ <b>Batch queue is already running!</b>",
+        { parseMode: "HTML" }
+      );
+      return true;
+    }
   }
 
   // Reset recursion hop counter to 0 since this execution is started fresh by a user action
@@ -331,10 +365,12 @@ export async function startBatchQueue(
 }
 
 /**
- * Processes multiple prompt items within an adaptive time budget (up to 55s or 4 images),
- * delivering results to Telegram, and chaining to the next step. If Cloudflare's
- * recursion hop limit approaches (hop >= 13), it cleanly pauses with a one-tap Resume
- * button to prevent 503 errors.
+ * Processes strictly ONE prompt item per worker execution, delivers the result to Telegram,
+ * and chains to the next step via internal fetch.
+ * Processing strictly 1 image per worker invocation guarantees we never exceed Cloudflare's
+ * background execution wall-clock timeout (~60s).
+ * When Cloudflare's subrequest recursion limit approaches (hopCount >= 14), it cleanly pauses
+ * with a one-tap Continue button so user interaction resets the depth to 0.
  */
 export async function processBatchStep(
   env: Env,
@@ -405,117 +441,104 @@ export async function processBatchStep(
     return;
   }
 
-  // Adaptive execution loop: process multiple images within safe 55s window
-  const stepStartTime = Date.now();
-  const MAX_STEP_TIME_MS = 55_000;
-  const MAX_IMAGES_PER_STEP = 4;
-  let imagesInThisStep = 0;
+  // Check cancellation before generation
+  const liveCheck = await getBatchState(env, chatId);
+  if (!liveCheck || liveCheck.status === "cancelled") {
+    await clearBatchState(env, chatId);
+    return;
+  }
 
-  while (state.currentIndex < state.total && imagesInThisStep < MAX_IMAGES_PER_STEP) {
-    // Check cancellation before each image
-    const liveCheck = await getBatchState(env, chatId);
-    if (!liveCheck || liveCheck.status === "cancelled") {
+  // Strictly process 1 image per worker invocation.
+  // This guarantees each execution takes ~25s, well within Cloudflare's background wall-clock limit (~60s).
+  const itemIndex = state.currentIndex;
+  const itemNum = itemIndex + 1;
+  const promptText = state.prompts[itemIndex];
+  const seed = generateRandomSeed();
+
+  // Update live status board
+  if (state.statusMessageId) {
+    await editTelegramMessage(
+      token,
+      chatId,
+      state.statusMessageId,
+      [
+        `⏳ <b>[${itemNum}/${state.total}] Rendering...</b>`,
+        `🎨 ${escapeHtml(wf.displayName)} · 📐 ${escapeHtml(ratio.id)}`,
+        `<i>"${escapeHtml(clamp(promptText, 200))}"</i>`,
+      ].join("\n"),
+      { parseMode: "HTML", replyMarkup: CANCEL_BUTTON_MARKUP }
+    ).catch(() => {});
+    await sendTelegramChatAction(token, chatId, "upload_photo");
+  }
+
+  try {
+    const effective = getEffectivePromptSettings(stored, wf);
+    const negative = wf.supportsNegativePrompt
+      ? state.negativeOverride ?? effective.negative
+      : undefined;
+    const prefill = effective.prefill;
+
+    const workflow = buildInjectedWorkflow(wf, {
+      positive: promptText,
+      negative,
+      prefill,
+      seed,
+      width: ratio.width,
+      height: ratio.height,
+    });
+
+    const promptId = await queuePrompt(
+      endpoint,
+      workflow,
+      `tg_batch_${chatId}_${Date.now()}_${itemNum}`
+    );
+
+    const mediaRefs = await pollForCompletion(endpoint, promptId, wf);
+
+    // Check if user cancelled while this prompt was polling
+    const postPollCheck = await getBatchState(env, chatId);
+    if (!postPollCheck || postPollCheck.status === "cancelled") {
       await clearBatchState(env, chatId);
       return;
     }
 
-    const itemIndex = state.currentIndex;
-    const itemNum = itemIndex + 1;
-    const promptText = state.prompts[itemIndex];
-    const seed = generateRandomSeed();
+    // Save as lastRun for quick regeneration
+    await setLastRun(env, chatId, {
+      positive: promptText,
+      negative: state.negativeOverride,
+      workflowId: wf.id,
+      ratio: ratio.id,
+      seed,
+    });
 
-    // Update live status board
-    if (state.statusMessageId) {
-      await editTelegramMessage(
-        token,
-        chatId,
-        state.statusMessageId,
-        [
-          `⏳ <b>[${itemNum}/${state.total}] Rendering...</b>`,
-          `🎨 ${escapeHtml(wf.displayName)} · 📐 ${escapeHtml(ratio.id)}`,
-          `<i>"${escapeHtml(clamp(promptText, 200))}"</i>`,
-        ].join("\n"),
-        { parseMode: "HTML", replyMarkup: CANCEL_BUTTON_MARKUP }
-      ).catch(() => {});
-      await sendTelegramChatAction(token, chatId, "upload_photo");
-    }
+    const caption = [
+      `<b>[${itemNum}/${state.total}]</b> · 🎨 ${escapeHtml(wf.displayName)} · 📐 ${escapeHtml(ratio.id)} · seed <code>${escapeHtml(seed)}</code>`,
+      `<i>${escapeHtml(clamp(promptText, 300))}</i>`,
+    ].join("\n");
 
-    try {
-      const effective = getEffectivePromptSettings(stored, wf);
-      const negative = wf.supportsNegativePrompt
-        ? state.negativeOverride ?? effective.negative
-        : undefined;
-      const prefill = effective.prefill;
-
-      const workflow = buildInjectedWorkflow(wf, {
-        positive: promptText,
-        negative,
-        prefill,
-        seed,
-        width: ratio.width,
-        height: ratio.height,
+    for (const ref of mediaRefs) {
+      const blob = await fetchMediaBlob(endpoint, ref);
+      await sendTelegramMedia(token, chatId, blob, ref.filename, caption, {
+        parseMode: "HTML",
       });
-
-      const promptId = await queuePrompt(
-        endpoint,
-        workflow,
-        `tg_batch_${chatId}_${Date.now()}_${itemNum}`
-      );
-
-      const mediaRefs = await pollForCompletion(endpoint, promptId, wf);
-
-      // Check if user cancelled while this prompt was polling
-      const postPollCheck = await getBatchState(env, chatId);
-      if (!postPollCheck || postPollCheck.status === "cancelled") {
-        await clearBatchState(env, chatId);
-        return;
-      }
-
-      // Save as lastRun for quick regeneration
-      await setLastRun(env, chatId, {
-        positive: promptText,
-        negative: state.negativeOverride,
-        workflowId: wf.id,
-        ratio: ratio.id,
-        seed,
-      });
-
-      const caption = [
-        `<b>[${itemNum}/${state.total}]</b> · 🎨 ${escapeHtml(wf.displayName)} · 📐 ${escapeHtml(ratio.id)} · seed <code>${escapeHtml(seed)}</code>`,
-        `<i>${escapeHtml(clamp(promptText, 300))}</i>`,
-      ].join("\n");
-
-      for (const ref of mediaRefs) {
-        const blob = await fetchMediaBlob(endpoint, ref);
-        await sendTelegramMedia(token, chatId, blob, ref.filename, caption, {
-          parseMode: "HTML",
-        });
-      }
-
-      state.successCount++;
-    } catch (err: any) {
-      state.failCount++;
-      const errMsg = err?.message || "Unknown error";
-      await sendTelegramMessage(
-        token,
-        chatId,
-        `⚠️ <b>[${itemNum}/${state.total}] Generation failed</b>\n<code>${escapeHtml(clamp(errMsg, 250))}</code>`,
-        { parseMode: "HTML" }
-      ).catch(() => {});
     }
 
-    // Advance index and persist state
-    state.currentIndex = itemIndex + 1;
-    state.updatedAt = Date.now();
-    await saveBatchState(env, chatId, state);
-    imagesInThisStep++;
-
-    // Check if time budget is exhausted
-    const elapsed = Date.now() - stepStartTime;
-    if (elapsed >= MAX_STEP_TIME_MS) {
-      break;
-    }
+    state.successCount++;
+  } catch (err: any) {
+    state.failCount++;
+    const errMsg = err?.message || "Unknown error";
+    await sendTelegramMessage(
+      token,
+      chatId,
+      `⚠️ <b>[${itemNum}/${state.total}] Generation failed</b>\n<code>${escapeHtml(clamp(errMsg, 250))}</code>`,
+      { parseMode: "HTML" }
+    ).catch(() => {});
   }
+
+  // Advance index and persist state
+  state.currentIndex = itemIndex + 1;
+  state.updatedAt = Date.now();
+  await saveBatchState(env, chatId, state);
 
   // If all items finished, render summary and clear
   if (state.currentIndex >= state.total) {
@@ -545,23 +568,25 @@ export async function processBatchStep(
   state.updatedAt = Date.now();
   await saveBatchState(env, chatId, state);
 
-  // Safety checkpoint: if Cloudflare subrequest recursion limit is near (hop >= 13),
-  // pause cleanly with a one-click Resume button instead of crashing with 503.
-  if (state.hopCount >= 13) {
+  // Safety checkpoint: Cloudflare strictly caps recursive subrequests at 16 (MAX_REQUEST_DEPTH = 16).
+  // At hop 14, pause cleanly with a one-tap Continue button so user click resets subrequest depth to 0.
+  if (state.hopCount >= 14) {
     state.status = "paused";
     await saveBatchState(env, chatId, state);
 
+    const remaining = state.total - state.currentIndex;
+    const nextBatchSize = Math.min(14, remaining);
     const checkpointText = [
-      `⏳ <b>Batch Checkpoint [${state.currentIndex}/${state.total}]</b>`,
+      `⏳ <b>Queue Checkpoint [${state.currentIndex}/${state.total}]</b>`,
       `🎨 <b>Model:</b> ${escapeHtml(wf.displayName)} · 📐 <b>Ratio:</b> ${escapeHtml(ratio.id)}`,
-      `📊 Successfully delivered ${state.successCount} images.`,
+      `📊 Successfully delivered ${state.successCount} images so far.`,
       ``,
-      `<i>Cloudflare serverless safety checkpoint reached.</i>`,
-      `Tap below to seamlessly continue the next set of images!`,
+      `<i>Cloudflare serverless safety block reached (prevents 503 error).</i>`,
+      `Tap <b>Continue Queue</b> below to run the next ${nextBatchSize} images!`,
     ].join("\n");
 
     const resumeMarkup = inlineKeyboard([
-      [["▶️ Continue Queue", "batch:resume"]],
+      [[`▶️ Continue Queue (${state.currentIndex + 1}–${state.currentIndex + nextBatchSize})`, "batch:resume"]],
       [["🛑 Cancel Queue", "batch:cancel"]],
     ]);
 
