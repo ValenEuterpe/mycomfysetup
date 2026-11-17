@@ -50,6 +50,7 @@ import {
   resumeBatch,
   processBatchStep,
   getBatchState,
+  StoredBatchState,
 } from "../lib/telegramBatch";
 import {
   ratioGlyph,
@@ -1334,7 +1335,20 @@ export const onRequest = async (context: {
 
     if (chatIdStr && batchId && secret && env.TELEGRAM_BOT_TOKEN) {
       const chatId = parseInt(chatIdStr, 10);
-      const state = await getBatchState(env, chatId);
+
+      // Prefer authoritative state passed directly in request body to bypass KV replication lag entirely
+      let payloadState: StoredBatchState | null = null;
+      try {
+        payloadState = (await request.json()) as StoredBatchState;
+      } catch {}
+
+      const state =
+        payloadState &&
+        payloadState.batchId === batchId &&
+        payloadState.secret === secret
+          ? payloadState
+          : await getBatchState(env, chatId);
+
       if (
         state &&
         state.batchId === batchId &&
@@ -1346,7 +1360,8 @@ export const onRequest = async (context: {
           origin,
           chatId,
           batchId,
-          env.TELEGRAM_BOT_TOKEN
+          env.TELEGRAM_BOT_TOKEN,
+          state
         );
         if (typeof context.waitUntil === "function") {
           context.waitUntil(stepPromise);

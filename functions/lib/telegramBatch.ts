@@ -31,6 +31,13 @@ import {
 const clamp = (s: string, max = 150) =>
   s.length > max ? `${s.slice(0, max - 1)}…` : s;
 
+/**
+ * Maximum consecutive images to run in a single automatic serverless stretch before
+ * pausing with a one-tap Continue button. 6 images safely fits within Cloudflare's
+ * subrequest recursion and CPU resource boundaries without any 503 or timeout risks.
+ */
+export const BATCH_CHUNK_SIZE = 6;
+
 export interface StoredBatchState {
   batchId: string;
   chatId: number;
@@ -158,6 +165,7 @@ export async function triggerNextBatchStep(
 
     const headers: Record<string, string> = {
       "User-Agent": "LocalImageGen-BatchWorker/1.0",
+      "Content-Type": "application/json",
     };
     if (env.TELEGRAM_WEBHOOK_SECRET?.trim()) {
       headers["X-Telegram-Bot-Api-Secret-Token"] = env.TELEGRAM_WEBHOOK_SECRET.trim();
@@ -166,6 +174,7 @@ export async function triggerNextBatchStep(
     const res = await fetch(url.toString(), {
       method: "POST",
       headers,
+      body: JSON.stringify(state),
     });
 
     if (!res.ok) {
@@ -261,7 +270,7 @@ export async function resumeBatch(
     { parseMode: "HTML" }
   );
 
-  await processBatchStep(env, origin, chatId, state.batchId, token);
+  await processBatchStep(env, origin, chatId, state.batchId, token, state);
   return true;
 }
 
@@ -361,25 +370,26 @@ export async function startBatchQueue(
   await saveBatchState(env, chatId, state);
 
   // 2. Launch step 0
-  await processBatchStep(env, origin, chatId, batchId, token);
+  await processBatchStep(env, origin, chatId, batchId, token, state);
 }
 
 /**
  * Processes strictly ONE prompt item per worker execution, delivers the result to Telegram,
- * and chains to the next step via internal fetch.
+ * and chains to the next step via internal fetch passing the state payload.
  * Processing strictly 1 image per worker invocation guarantees we never exceed Cloudflare's
- * background execution wall-clock timeout (~60s).
- * When Cloudflare's subrequest recursion limit approaches (hopCount >= 14), it cleanly pauses
- * with a one-tap Continue button so user interaction resets the depth to 0.
+ * background execution wall-clock timeout (~30s).
+ * When the safe chunk limit (BATCH_CHUNK_SIZE = 6) is reached, it cleanly pauses with a one-tap
+ * Continue button so user interaction resets the depth to 0.
  */
 export async function processBatchStep(
   env: Env,
   origin: string,
   chatId: number,
   batchId: string,
-  token: string
+  token: string,
+  initialState?: StoredBatchState
 ): Promise<void> {
-  const state = await getBatchState(env, chatId);
+  const state = initialState ?? (await getBatchState(env, chatId));
 
   // Ensure state matches current active batch
   if (!state || state.batchId !== batchId) {
@@ -441,9 +451,9 @@ export async function processBatchStep(
     return;
   }
 
-  // Check cancellation before generation
+  // Check cancellation before generation (only abort if explicitly cancelled by user)
   const liveCheck = await getBatchState(env, chatId);
-  if (!liveCheck || liveCheck.status === "cancelled") {
+  if (liveCheck && liveCheck.status === "cancelled") {
     await clearBatchState(env, chatId);
     return;
   }
@@ -495,9 +505,9 @@ export async function processBatchStep(
 
     const mediaRefs = await pollForCompletion(endpoint, promptId, wf);
 
-    // Check if user cancelled while this prompt was polling
+    // Check if user cancelled while this prompt was polling (only abort if explicitly cancelled)
     const postPollCheck = await getBatchState(env, chatId);
-    if (!postPollCheck || postPollCheck.status === "cancelled") {
+    if (postPollCheck && postPollCheck.status === "cancelled") {
       await clearBatchState(env, chatId);
       return;
     }
@@ -535,12 +545,13 @@ export async function processBatchStep(
     ).catch(() => {});
   }
 
-  // Advance index and persist state
+  // Advance index and hop counter atomically in a single KV write (prevents KV 429 write limit)
   state.currentIndex = itemIndex + 1;
+  state.hopCount = (state.hopCount || 0) + 1;
   state.updatedAt = Date.now();
   await saveBatchState(env, chatId, state);
 
-  // If all items finished, render summary and clear
+  // If all items finished, render completion summary and clear
   if (state.currentIndex >= state.total) {
     state.status = "completed";
     await clearBatchState(env, chatId);
@@ -563,25 +574,19 @@ export async function processBatchStep(
     return;
   }
 
-  // Advance hop counter
-  state.hopCount = (state.hopCount || 0) + 1;
-  state.updatedAt = Date.now();
-  await saveBatchState(env, chatId, state);
-
-  // Safety checkpoint: Cloudflare strictly caps recursive subrequests at 16 (MAX_REQUEST_DEPTH = 16).
-  // At hop 14, pause cleanly with a one-tap Continue button so user click resets subrequest depth to 0.
-  if (state.hopCount >= 14) {
+  // Safety checkpoint: pause after BATCH_CHUNK_SIZE (6 images) to guarantee zero 503 or execution limits
+  if (state.hopCount >= BATCH_CHUNK_SIZE) {
     state.status = "paused";
     await saveBatchState(env, chatId, state);
 
     const remaining = state.total - state.currentIndex;
-    const nextBatchSize = Math.min(14, remaining);
+    const nextBatchSize = Math.min(BATCH_CHUNK_SIZE, remaining);
     const checkpointText = [
       `⏳ <b>Queue Checkpoint [${state.currentIndex}/${state.total}]</b>`,
       `🎨 <b>Model:</b> ${escapeHtml(wf.displayName)} · 📐 <b>Ratio:</b> ${escapeHtml(ratio.id)}`,
       `📊 Successfully delivered ${state.successCount} images so far.`,
       ``,
-      `<i>Cloudflare serverless safety block reached (prevents 503 error).</i>`,
+      `<i>Serverless checkpoint reached (${BATCH_CHUNK_SIZE}-image safe block).</i>`,
       `Tap <b>Continue Queue</b> below to run the next ${nextBatchSize} images!`,
     ].join("\n");
 

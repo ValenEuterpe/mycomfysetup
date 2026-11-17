@@ -139,7 +139,7 @@ export async function pollForCompletion(
   options: { maxWaitMs?: number; intervalMs?: number } = {}
 ): Promise<{ filename: string; subfolder: string; type: string }[]> {
   const maxWaitMs = options.maxWaitMs ?? 240_000;
-  const intervalMs = options.intervalMs ?? 1_500;
+  const intervalMs = options.intervalMs ?? 1_000;
   const startTime = Date.now();
 
   while (Date.now() - startTime < maxWaitMs) {
